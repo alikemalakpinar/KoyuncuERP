@@ -1,31 +1,37 @@
 import { NavLink } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  LayoutDashboard,
-  Users,
-  ShoppingCart,
-  Truck,
-  BookOpen,
-  FileText,
-  Settings,
-  BarChart3,
-  Handshake,
-  Package,
+  LayoutDashboard, Users, ShoppingCart, Truck, BookOpen,
+  FileText, Settings, BarChart3, Handshake, Package,
+  Receipt, TrendingUp, Award, LogOut, ChevronDown,
 } from 'lucide-react'
+import { useAuth, roleLabels, type UserRole } from '../contexts/AuthContext'
 
-const navItems = [
-  { to: '/', icon: LayoutDashboard, label: 'Gösterge Paneli' },
-  { to: '/accounts', icon: Users, label: 'Cariler' },
-  { to: '/orders', icon: ShoppingCart, label: 'Siparişler' },
-  { to: '/inventory', icon: Package, label: 'Ürün Kataloğu' },
-  { to: '/shipments', icon: Truck, label: 'Sevkiyat' },
-  { to: '/commissions', icon: Handshake, label: 'Acente Hakedişleri' },
-  { to: '/profit', icon: BarChart3, label: 'Kâr Analizi' },
-  { to: '/ledger', icon: BookOpen, label: 'Muhasebe' },
-  { to: '/documents', icon: FileText, label: 'Belgeler' },
-]
+const roleColors: Record<UserRole, string> = {
+  patron: 'from-amber-500 to-orange-600',
+  mudur: 'from-blue-500 to-indigo-600',
+  muhasebeci: 'from-emerald-500 to-teal-600',
+  satis_elemani: 'from-purple-500 to-violet-600',
+  acente: 'from-rose-500 to-pink-600',
+}
 
 export default function Sidebar() {
+  const { user, logout, hasPermission } = useAuth()
+
+  const navItems = [
+    { to: '/', icon: LayoutDashboard, label: 'Gösterge Paneli', show: true },
+    { to: '/accounts', icon: Users, label: 'Cariler', show: user?.role !== 'acente' },
+    { to: '/orders', icon: ShoppingCart, label: 'Siparişler', show: true },
+    { to: '/inventory', icon: Package, label: 'Ürün Kataloğu', show: user?.role !== 'acente' },
+    { to: '/stock-analysis', icon: TrendingUp, label: 'Stok & Analiz', show: user?.role !== 'acente' },
+    { to: '/invoices', icon: Receipt, label: 'Faturalar', show: hasPermission('create_invoice') || hasPermission('view_accounting') },
+    { to: '/commissions', icon: Handshake, label: 'Komisyonlar', show: true },
+    { to: '/performance', icon: Award, label: 'Performans', show: user?.role !== 'satis_elemani' },
+    { to: '/accounting', icon: BookOpen, label: 'Muhasebe', show: hasPermission('view_accounting') },
+    { to: '/profit', icon: BarChart3, label: 'Kâr Analizi', show: hasPermission('view_profit') },
+    { to: '/reports', icon: FileText, label: 'Raporlar', show: hasPermission('view_reports') },
+  ].filter(item => item.show)
+
   return (
     <aside className="glass flex w-[220px] flex-col border-r border-border dark:border-border-dark">
       {/* Logo */}
@@ -44,7 +50,7 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-0.5 px-3 py-4">
+      <nav className="flex-1 space-y-0.5 px-3 py-4 overflow-y-auto">
         {navItems.map((item) => (
           <NavLink
             key={item.to}
@@ -75,15 +81,26 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      {/* Settings */}
-      <div className="border-t border-border dark:border-border-dark px-3 py-3">
-        <NavLink
-          to="/settings"
-          className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors"
+      {/* User Info & Logout */}
+      <div className="border-t border-border dark:border-border-dark px-3 py-3 space-y-2">
+        {user && (
+          <div className="flex items-center gap-2.5 px-3 py-2">
+            <div className={`flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br ${roleColors[user.role]} text-white font-bold text-xs shrink-0`}>
+              {user.name.split(' ').map(n => n[0]).join('')}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium text-gray-900 dark:text-white truncate">{user.name}</p>
+              <p className="text-[10px] text-gray-500 dark:text-gray-400">{roleLabels[user.role]}</p>
+            </div>
+          </div>
+        )}
+        <button
+          onClick={logout}
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors"
         >
-          <Settings className="h-[18px] w-[18px]" />
-          <span>Ayarlar</span>
-        </NavLink>
+          <LogOut className="h-[18px] w-[18px]" />
+          <span>Çıkış Yap</span>
+        </button>
       </div>
     </aside>
   )
