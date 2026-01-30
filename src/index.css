@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-bg: 255 255 255;
+    --color-sidebar: 248 249 250;
+    --color-text: 33 37 41;
+    --color-text-secondary: 134 142 150;
+  }
+
+  .dark {
+    --color-bg: 26 27 30;
+    --color-sidebar: 37 38 43;
+    --color-text: 241 243 245;
+    --color-text-secondary: 144 146 150;
+  }
+
+  body {
+    @apply bg-surface text-gray-900 dark:bg-surface-dark dark:text-gray-100;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  /* Premium scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 dark:bg-gray-600 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400 dark:bg-gray-500;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-white/70 dark:bg-surface-dark/70 backdrop-blur-[20px] border border-white/20 dark:border-white/5;
+  }
+
+  .card {
+    @apply bg-white dark:bg-surface-dark-secondary rounded-xl border border-border dark:border-border-dark shadow-card;
+  }
+
+  .kpi-card {
+    @apply card p-6 flex flex-col gap-2 transition-shadow duration-200 hover:shadow-elevated;
+  }
+}
