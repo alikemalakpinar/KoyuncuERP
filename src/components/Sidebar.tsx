@@ -10,12 +10,14 @@ import {
   Settings,
   BarChart3,
   Handshake,
+  Package,
 } from 'lucide-react'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Gösterge Paneli' },
   { to: '/accounts', icon: Users, label: 'Cariler' },
   { to: '/orders', icon: ShoppingCart, label: 'Siparişler' },
+  { to: '/inventory', icon: Package, label: 'Ürün Kataloğu' },
   { to: '/shipments', icon: Truck, label: 'Sevkiyat' },
   { to: '/commissions', icon: Handshake, label: 'Acente Hakedişleri' },
   { to: '/profit', icon: BarChart3, label: 'Kâr Analizi' },

@@ -36,6 +36,33 @@ export interface DbClient {
   landedCost: {
     findMany: (args?: any) => Promise<any[]>
   }
+  product: {
+    findMany: (args?: any) => Promise<any[]>
+    findUnique: (args: any) => Promise<any>
+    create: (args: any) => Promise<any>
+    update: (args: any) => Promise<any>
+  }
+  productVariant: {
+    findMany: (args?: any) => Promise<any[]>
+    findUnique: (args: any) => Promise<any>
+  }
+  warehouse: {
+    findMany: (args?: any) => Promise<any[]>
+  }
+  stock: {
+    findMany: (args?: any) => Promise<any[]>
+    upsert: (args: any) => Promise<any>
+  }
+  stockMovement: {
+    findMany: (args?: any) => Promise<any[]>
+    create: (args: any) => Promise<any>
+  }
+  invoice: {
+    findMany: (args?: any) => Promise<any[]>
+    findUnique: (args: any) => Promise<any>
+    create: (args: any) => Promise<any>
+    update: (args: any) => Promise<any>
+  }
   exchangeRate: {
     findFirst: (args: any) => Promise<any>
   }

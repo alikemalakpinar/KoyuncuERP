@@ -10,12 +10,14 @@ import {
   BookOpen,
   BarChart3,
   Handshake,
+  Package,
 } from 'lucide-react'
 
 const commands = [
   { id: 'dashboard', label: 'Gösterge Paneli', icon: LayoutDashboard, path: '/' },
   { id: 'accounts', label: 'Cariler', icon: Users, path: '/accounts' },
   { id: 'orders', label: 'Siparişler', icon: ShoppingCart, path: '/orders' },
+  { id: 'inventory', label: 'Ürün Kataloğu', icon: Package, path: '/inventory' },
   { id: 'shipments', label: 'Sevkiyat', icon: Truck, path: '/shipments' },
   { id: 'commissions', label: 'Acente Hakedişleri', icon: Handshake, path: '/commissions' },
   { id: 'profit', label: 'Kâr Analizi', icon: BarChart3, path: '/profit' },

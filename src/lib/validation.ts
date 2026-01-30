@@ -88,6 +88,37 @@ export const paymentSchema = z.object({
 
 export type PaymentInput = z.infer<typeof paymentSchema>
 
+// ── Product ───────────────────────────────────────────────
+
+export const productVariantSchema = z.object({
+  sku: z.string().min(1, 'SKU zorunludur'),
+  size: z.string().min(1, 'Boyut zorunludur'),
+  width: z.number().int().min(1, 'Genişlik zorunludur'),
+  length: z.number().int().min(1, 'Uzunluk zorunludur'),
+  color: z.string().optional(),
+  barcode: z.string().optional(),
+  listPrice: positiveDecimal,
+  baseCost: decimalString,
+})
+
+export const productCreateSchema = z.object({
+  code: z
+    .string()
+    .min(2, 'Kod en az 2 karakter olmalıdır')
+    .max(20, 'Kod en fazla 20 karakter olabilir')
+    .regex(/^[A-Z0-9-]+$/, 'Kod yalnızca büyük harf, rakam ve tire içerebilir'),
+  name: z.string().min(2, 'Ürün adı en az 2 karakter olmalıdır'),
+  collection: z.string().optional(),
+  material: z.enum([
+    'WOOL', 'ACRYLIC', 'POLYESTER', 'COTTON', 'SILK', 'VISCOSE', 'BAMBOO', 'BLEND', 'OTHER',
+  ]).default('WOOL'),
+  description: z.string().optional(),
+  images: z.array(z.string()).default([]),
+  variants: z.array(productVariantSchema).optional(),
+})
+
+export type ProductCreateInput = z.infer<typeof productCreateSchema>
+
 // ── Helper: format Zod errors ──────────────────────────────
 
 export function formatZodErrors(error: z.ZodError): Record<string, string> {
