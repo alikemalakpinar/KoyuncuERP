@@ -5,6 +5,7 @@ import { registerOrderHandlers } from './ipc/orders'
 import { registerLedgerHandlers } from './ipc/ledger'
 import { registerAnalyticsHandlers } from './ipc/analytics'
 import { registerProductHandlers } from './ipc/products'
+import { registerPlatinumHandlers } from './ipc/platinum'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -40,6 +41,7 @@ function registerIpcHandlers() {
   registerLedgerHandlers(ipcMain)
   registerAnalyticsHandlers(ipcMain)
   registerProductHandlers(ipcMain)
+  registerPlatinumHandlers(ipcMain)
 }
 
 app.whenReady().then(() => {

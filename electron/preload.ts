@@ -83,4 +83,50 @@ contextBridge.exposeInMainWorld('api', {
     accountHealth: (accountId: string) =>
       ipcRenderer.invoke('analytics:accountHealth', accountId),
   },
+
+  // ── Inventory FIFO (Platinum) ──────────────────────────
+  inventoryFifo: {
+    receiveLot: (data: any) =>
+      ipcRenderer.invoke('inventory:receiveLot', data),
+    allocate: (data: any) =>
+      ipcRenderer.invoke('inventory:allocate', data),
+    fulfill: (data: any) =>
+      ipcRenderer.invoke('inventory:fulfill', data),
+    lots: (variantId: string, warehouseId?: string) =>
+      ipcRenderer.invoke('inventory:lots', variantId, warehouseId),
+    transactions: (variantId: string, limit?: number) =>
+      ipcRenderer.invoke('inventory:transactions', variantId, limit),
+  },
+
+  // ── Pricing Engine (Platinum) ──────────────────────────
+  pricing: {
+    resolve: (data: { accountId: string; variantId: string; quantity?: string }) =>
+      ipcRenderer.invoke('pricing:resolve', data),
+    resolveBatch: (data: { accountId: string; variants: { variantId: string; quantity: string }[] }) =>
+      ipcRenderer.invoke('pricing:resolveBatch', data),
+    lists: () =>
+      ipcRenderer.invoke('pricing:lists'),
+    createList: (data: { name: string; currency: string; isDefault?: boolean }) =>
+      ipcRenderer.invoke('pricing:createList', data),
+    addItem: (data: { priceListId: string; variantId: string; price: string; minQuantity?: string }) =>
+      ipcRenderer.invoke('pricing:addItem', data),
+    assignToAccount: (accountId: string, priceListId: string) =>
+      ipcRenderer.invoke('pricing:assignToAccount', accountId, priceListId),
+  },
+
+  // ── Finance (Platinum) ─────────────────────────────────
+  finance: {
+    lockPeriod: (data: { closingDate: string; lockedBy: string; notes?: string }) =>
+      ipcRenderer.invoke('finance:lockPeriod', data),
+    getLatestLock: () =>
+      ipcRenderer.invoke('finance:getLatestLock'),
+    isDateLocked: (dateStr: string) =>
+      ipcRenderer.invoke('finance:isDateLocked', dateStr),
+    agingReport: () =>
+      ipcRenderer.invoke('finance:agingReport'),
+    fxRevaluation: (currentRates: Record<string, number>) =>
+      ipcRenderer.invoke('finance:fxRevaluation', currentRates),
+    postFxRevaluation: (data: { items: any[]; postedBy: string }) =>
+      ipcRenderer.invoke('finance:postFxRevaluation', data),
+  },
 })

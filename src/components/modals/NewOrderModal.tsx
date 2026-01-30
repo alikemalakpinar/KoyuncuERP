@@ -78,12 +78,19 @@ const demoSellers = [
 ]
 
 const demoCustomers = [
-  { id: 'c1', code: 'C-001', name: 'HomeStyle Inc.', city: 'New York', paymentTerm: 30 },
-  { id: 'c2', code: 'C-002', name: 'Luxury Floors NY', city: 'Los Angeles', paymentTerm: 45 },
-  { id: 'c3', code: 'C-003', name: 'Pacific Rugs', city: 'San Francisco', paymentTerm: 30 },
-  { id: 'c4', code: 'C-004', name: 'Desert Home Decor', city: 'Phoenix', paymentTerm: 30 },
-  { id: 'c5', code: 'C-005', name: 'Chicago Interiors', city: 'Chicago', paymentTerm: 60 },
+  { id: 'c1', code: 'C-001', name: 'HomeStyle Inc.', city: 'New York', paymentTerm: 30, priceList: 'USA Wholesale' },
+  { id: 'c2', code: 'C-002', name: 'Luxury Floors NY', city: 'Los Angeles', paymentTerm: 45, priceList: 'USA Premium' },
+  { id: 'c3', code: 'C-003', name: 'Pacific Rugs', city: 'San Francisco', paymentTerm: 30, priceList: 'USA Wholesale' },
+  { id: 'c4', code: 'C-004', name: 'Desert Home Decor', city: 'Phoenix', paymentTerm: 30, priceList: null },
+  { id: 'c5', code: 'C-005', name: 'Chicago Interiors', city: 'Chicago', paymentTerm: 60, priceList: '2026 Distributor' },
 ]
+
+// Demo price list multipliers (in production resolved via pricing:resolve IPC)
+const demoPriceListMultipliers: Record<string, number> = {
+  'USA Wholesale': 0.85,    // 15% discount from list price
+  'USA Premium': 0.92,      // 8% discount
+  '2026 Distributor': 0.78, // 22% discount
+}
 
 export default function NewOrderModal({ open, onClose }: Props) {
   const { data: accounts = [] } = useAccountsQuery({ type: 'CUSTOMER' })
@@ -177,21 +184,42 @@ export default function NewOrderModal({ open, onClose }: Props) {
   }
 
   const handleProductSelect = (item: any) => {
+    // Apply price list pricing if customer has an assigned list
+    const cust = demoCustomers.find(c => c.id === accountId)
+    let resolvedPrice = item.unitPrice
+    let priceSource: 'list' | 'pricelist' = 'list'
+
+    if (cust?.priceList && demoPriceListMultipliers[cust.priceList]) {
+      const multiplier = demoPriceListMultipliers[cust.priceList]
+      resolvedPrice = (parseFloat(item.unitPrice || '0') * multiplier).toFixed(2)
+      priceSource = 'pricelist'
+    }
+
+    const belowCost = parseFloat(resolvedPrice || '0') < parseFloat(item.baseCost || '0')
+
     setLines(lines.map((l, i) => {
       if (i !== pickerLineIdx) return l
-      const belowCost = parseFloat(item.unitPrice || '0') < parseFloat(item.baseCost || '0')
       return {
         ...l,
         variantId: item.variantId,
         productName: item.productName,
         sku: item.sku,
-        unitPrice: item.unitPrice,
+        unitPrice: resolvedPrice,
         purchasePrice: item.baseCost,
         unit: item.unit,
         discount: '0',
         belowCost,
       }
     }))
+
+    // Show margin guard toast if below cost
+    if (belowCost) {
+      toast?.({
+        type: 'warning',
+        title: 'Maliyet Altı Satış!',
+        message: `${item.productName} maliyetin altında fiyatlandırıldı ($${resolvedPrice} < $${item.baseCost})`,
+      })
+    }
   }
 
   // Calculations
@@ -433,6 +461,11 @@ export default function NewOrderModal({ open, onClose }: Props) {
                       <span className="text-gray-600 dark:text-gray-400">
                         <strong className="text-gray-900 dark:text-white">{selectedCustomer.name}</strong>
                         {' '}| {selectedCustomer.city} | Vade: {selectedCustomer.paymentTerm} gün
+                        {selectedCustomer.priceList && (
+                          <> | <span className="inline-flex items-center rounded-md bg-indigo-100 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5 text-[10px] font-medium ml-1">
+                            <DollarSign className="h-2.5 w-2.5 mr-0.5" />{selectedCustomer.priceList}
+                          </span></>
+                        )}
                       </span>
                     </div>
                   )}
