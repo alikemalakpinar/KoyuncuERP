@@ -13,8 +13,10 @@ export default defineConfig({
         vite: {
           build: {
             outDir: 'dist-electron',
+            lib: { entry: 'electron/main.ts', formats: ['cjs'] },
             rollupOptions: {
               external: ['electron', '@prisma/client'],
+              output: { entryFileNames: '[name].js' },
             },
           },
         },
@@ -27,8 +29,10 @@ export default defineConfig({
         vite: {
           build: {
             outDir: 'dist-electron',
+            lib: { entry: 'electron/preload.ts', formats: ['cjs'] },
             rollupOptions: {
               external: ['electron'],
+              output: { entryFileNames: '[name].js' },
             },
           },
         },
