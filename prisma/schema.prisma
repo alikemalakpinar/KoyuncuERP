@@ -311,6 +311,24 @@ enum DocumentType {
   CREDIT_NOTE
 }
 
+// ─── Audit Log (Denetim İzi) ──────────────────────────────
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  entityType   String   @map("entity_type")
+  entityId     String   @map("entity_id")
+  action       String   // CREATE, UPDATE, STATUS_CHANGE, CANCEL, REVERSAL
+  previousData Json?    @map("previous_data")
+  newData      Json?    @map("new_data")
+  userId       String   @default("system") @map("user_id")
+  description  String
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
 // ─── Exchange Rates (Kur Tablosu) ─────────────────────────
 
 model ExchangeRate {

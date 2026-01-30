@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Plus, Trash2 } from 'lucide-react'
+import { X, Plus, Trash2, AlertCircle } from 'lucide-react'
+import { orderCreateSchema, formatZodErrors } from '../../lib/validation'
+import { useCreateOrder, useAccountsQuery } from '../../hooks/useIpc'
 
 interface Props {
   open: boolean
@@ -12,21 +14,31 @@ interface OrderLine {
   quantity: string
   unit: string
   unitPrice: string
+  purchasePrice: string
+}
+
+const emptyLine: OrderLine = {
+  productName: '',
+  quantity: '',
+  unit: 'm2',
+  unitPrice: '',
+  purchasePrice: '',
 }
 
 export default function NewOrderModal({ open, onClose }: Props) {
-  const [customer, setCustomer] = useState('')
+  const { data: accounts = [] } = useAccountsQuery({ type: 'CUSTOMER' })
+  const createOrder = useCreateOrder()
+
+  const [accountId, setAccountId] = useState('')
   const [currency, setCurrency] = useState('USD')
-  const [lines, setLines] = useState<OrderLine[]>([
-    { productName: '', quantity: '', unit: 'm2', unitPrice: '' },
-  ])
+  const [vatRate, setVatRate] = useState('0')
+  const [exchangeRate, setExchangeRate] = useState('1.0000')
+  const [notes, setNotes] = useState('')
+  const [lines, setLines] = useState<OrderLine[]>([{ ...emptyLine }])
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const addLine = () =>
-    setLines([...lines, { productName: '', quantity: '', unit: 'm2', unitPrice: '' }])
-
-  const removeLine = (idx: number) =>
-    setLines(lines.filter((_, i) => i !== idx))
-
+  const addLine = () => setLines([...lines, { ...emptyLine }])
+  const removeLine = (idx: number) => setLines(lines.filter((_, i) => i !== idx))
   const updateLine = (idx: number, field: keyof OrderLine, value: string) =>
     setLines(lines.map((l, i) => (i === idx ? { ...l, [field]: value } : l)))
 
@@ -35,6 +47,49 @@ export default function NewOrderModal({ open, onClose }: Props) {
     const p = parseFloat(l.unitPrice) || 0
     return sum + q * p
   }, 0)
+
+  const handleSubmit = () => {
+    const data = {
+      accountId,
+      currency,
+      vatRate,
+      exchangeRate,
+      notes: notes || undefined,
+      items: lines.map((l) => ({
+        productName: l.productName,
+        quantity: l.quantity,
+        unit: l.unit,
+        unitPrice: l.unitPrice,
+        purchasePrice: l.purchasePrice || undefined,
+      })),
+    }
+
+    const result = orderCreateSchema.safeParse(data)
+    if (!result.success) {
+      setErrors(formatZodErrors(result.error))
+      return
+    }
+
+    setErrors({})
+    createOrder.mutate(result.data, {
+      onSuccess: (res) => {
+        if (res.success) {
+          resetForm()
+          onClose()
+        }
+      },
+    })
+  }
+
+  const resetForm = () => {
+    setAccountId('')
+    setCurrency('USD')
+    setVatRate('0')
+    setExchangeRate('1.0000')
+    setNotes('')
+    setLines([{ ...emptyLine }])
+    setErrors({})
+  }
 
   return (
     <AnimatePresence>
@@ -69,18 +124,31 @@ export default function NewOrderModal({ open, onClose }: Props) {
 
             {/* Form */}
             <div className="max-h-[60vh] overflow-y-auto px-6 py-5 space-y-5">
-              {/* Customer & Currency */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
+              {/* Customer & Currency Row */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="col-span-1">
                   <label className="block text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-1.5">
                     Müşteri
                   </label>
-                  <input
-                    value={customer}
-                    onChange={(e) => setCustomer(e.target.value)}
-                    placeholder="Cari seçin..."
-                    className="w-full rounded-xl border border-border dark:border-border-dark bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 transition text-gray-900 dark:text-white placeholder:text-gray-400"
-                  />
+                  <select
+                    value={accountId}
+                    onChange={(e) => setAccountId(e.target.value)}
+                    className={`w-full rounded-xl border ${errors.accountId ? 'border-red-400' : 'border-border dark:border-border-dark'} bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 transition text-gray-900 dark:text-white`}
+                  >
+                    <option value="">Seçiniz...</option>
+                    {accounts
+                      .filter((a: any) => a.type === 'CUSTOMER' || a.type === 'BOTH')
+                      .map((a: any) => (
+                        <option key={a.id} value={a.id}>
+                          {a.code} – {a.name}
+                        </option>
+                      ))}
+                  </select>
+                  {errors.accountId && (
+                    <p className="mt-1 flex items-center gap-1 text-[11px] text-red-500">
+                      <AlertCircle className="h-3 w-3" /> {errors.accountId}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-1.5">
@@ -89,12 +157,27 @@ export default function NewOrderModal({ open, onClose }: Props) {
                   <select
                     value={currency}
                     onChange={(e) => setCurrency(e.target.value)}
-                    className="w-full rounded-xl border border-border dark:border-border-dark bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 transition text-gray-900 dark:text-white"
+                    className="w-full rounded-xl border border-border dark:border-border-dark bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 transition text-gray-900 dark:text-white"
                   >
                     <option value="USD">USD ($)</option>
                     <option value="EUR">EUR</option>
                     <option value="TRY">TRY</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-1.5">
+                    Kur (1 {currency} = ? TRY)
+                  </label>
+                  <input
+                    value={exchangeRate}
+                    onChange={(e) => setExchangeRate(e.target.value)}
+                    type="number"
+                    step="0.0001"
+                    className={`w-full rounded-xl border ${errors.exchangeRate ? 'border-red-400' : 'border-border dark:border-border-dark'} bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 transition text-gray-900 dark:text-white tabular-nums`}
+                  />
+                  {errors.exchangeRate && (
+                    <p className="mt-1 text-[11px] text-red-500">{errors.exchangeRate}</p>
+                  )}
                 </div>
               </div>
 
@@ -112,34 +195,34 @@ export default function NewOrderModal({ open, onClose }: Props) {
                     Kalem Ekle
                   </button>
                 </div>
-
+                {errors.items && (
+                  <p className="mb-2 flex items-center gap-1 text-[11px] text-red-500">
+                    <AlertCircle className="h-3 w-3" /> {errors.items}
+                  </p>
+                )}
                 <div className="space-y-2">
                   {lines.map((line, idx) => (
                     <div
                       key={idx}
-                      className="grid grid-cols-[1fr_80px_70px_100px_32px] gap-2 items-center"
+                      className="grid grid-cols-[1fr_70px_60px_80px_80px_28px] gap-2 items-center"
                     >
                       <input
                         value={line.productName}
-                        onChange={(e) =>
-                          updateLine(idx, 'productName', e.target.value)
-                        }
+                        onChange={(e) => updateLine(idx, 'productName', e.target.value)}
                         placeholder="Ürün adı"
-                        className="rounded-xl border border-border dark:border-border-dark bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 transition text-gray-900 dark:text-white placeholder:text-gray-400"
+                        className={`rounded-xl border ${errors[`items.${idx}.productName`] ? 'border-red-400' : 'border-border dark:border-border-dark'} bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 transition text-gray-900 dark:text-white placeholder:text-gray-400`}
                       />
                       <input
                         value={line.quantity}
-                        onChange={(e) =>
-                          updateLine(idx, 'quantity', e.target.value)
-                        }
+                        onChange={(e) => updateLine(idx, 'quantity', e.target.value)}
                         placeholder="Miktar"
                         type="number"
-                        className="rounded-xl border border-border dark:border-border-dark bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 transition text-gray-900 dark:text-white placeholder:text-gray-400 tabular-nums"
+                        className="rounded-xl border border-border dark:border-border-dark bg-surface-secondary dark:bg-surface-dark-tertiary px-2 py-2 text-sm outline-none focus:border-brand-400 transition text-gray-900 dark:text-white tabular-nums"
                       />
                       <select
                         value={line.unit}
                         onChange={(e) => updateLine(idx, 'unit', e.target.value)}
-                        className="rounded-xl border border-border dark:border-border-dark bg-surface-secondary dark:bg-surface-dark-tertiary px-2 py-2 text-sm outline-none text-gray-900 dark:text-white"
+                        className="rounded-xl border border-border dark:border-border-dark bg-surface-secondary dark:bg-surface-dark-tertiary px-1 py-2 text-sm outline-none text-gray-900 dark:text-white"
                       >
                         <option value="m2">m2</option>
                         <option value="adet">Adet</option>
@@ -147,23 +230,42 @@ export default function NewOrderModal({ open, onClose }: Props) {
                       </select>
                       <input
                         value={line.unitPrice}
-                        onChange={(e) =>
-                          updateLine(idx, 'unitPrice', e.target.value)
-                        }
+                        onChange={(e) => updateLine(idx, 'unitPrice', e.target.value)}
                         placeholder="Fiyat"
                         type="number"
-                        className="rounded-xl border border-border dark:border-border-dark bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 transition text-gray-900 dark:text-white placeholder:text-gray-400 tabular-nums"
+                        className="rounded-xl border border-border dark:border-border-dark bg-surface-secondary dark:bg-surface-dark-tertiary px-2 py-2 text-sm outline-none focus:border-brand-400 transition text-gray-900 dark:text-white tabular-nums"
+                      />
+                      <input
+                        value={line.purchasePrice}
+                        onChange={(e) => updateLine(idx, 'purchasePrice', e.target.value)}
+                        placeholder="Alış"
+                        type="number"
+                        className="rounded-xl border border-border dark:border-border-dark bg-surface-secondary dark:bg-surface-dark-tertiary px-2 py-2 text-sm outline-none focus:border-brand-400 transition text-gray-900 dark:text-white tabular-nums"
                       />
                       <button
                         onClick={() => removeLine(idx)}
                         disabled={lines.length === 1}
-                        className="flex items-center justify-center rounded-lg p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="flex items-center justify-center rounded-lg p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="block text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-1.5">
+                  Notlar
+                </label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={2}
+                  placeholder="Sipariş notu (opsiyonel)..."
+                  className="w-full rounded-xl border border-border dark:border-border-dark bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 transition resize-none text-gray-900 dark:text-white placeholder:text-gray-400"
+                />
               </div>
             </div>
 
@@ -172,11 +274,7 @@ export default function NewOrderModal({ open, onClose }: Props) {
               <div className="text-sm">
                 <span className="text-gray-500 dark:text-gray-400">Toplam: </span>
                 <span className="font-semibold text-gray-900 dark:text-white tabular-nums">
-                  {currency === 'USD' ? '$' : currency === 'EUR' ? '\u20AC' : '\u20BA'}
-                  {total.toLocaleString('en-US', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
+                  ${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -184,10 +282,14 @@ export default function NewOrderModal({ open, onClose }: Props) {
                   onClick={onClose}
                   className="rounded-xl border border-border dark:border-border-dark px-4 py-2 text-[13px] font-medium text-gray-700 dark:text-gray-300 hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary transition-colors"
                 >
-                  Iptal
+                  İptal
                 </button>
-                <button className="rounded-xl bg-brand-600 px-4 py-2 text-[13px] font-medium text-white hover:bg-brand-700 transition-colors">
-                  Sipariş Oluştur
+                <button
+                  onClick={handleSubmit}
+                  disabled={createOrder.isPending}
+                  className="rounded-xl bg-brand-600 px-4 py-2 text-[13px] font-medium text-white hover:bg-brand-700 transition-colors disabled:opacity-50"
+                >
+                  {createOrder.isPending ? 'Kaydediliyor...' : 'Sipariş Oluştur'}
                 </button>
               </div>
             </div>

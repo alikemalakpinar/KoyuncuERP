@@ -20,7 +20,7 @@ import {
   Tooltip,
   CartesianGrid,
 } from 'recharts'
-import { useAccounts, useAccountHealth } from '../hooks/useAnalytics'
+import { useAccountsQuery, useAccountHealthQuery } from '../hooks/useIpc'
 
 const typeLabels: Record<string, string> = {
   CUSTOMER: 'Müşteri',
@@ -37,7 +37,7 @@ const typeBadgeColors: Record<string, string> = {
 }
 
 export default function AccountsPage() {
-  const accounts = useAccounts()
+  const { data: accounts = [] } = useAccountsQuery()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -184,12 +184,26 @@ function AccountInspector({
   onClose,
 }: {
   accountId: string
-  account: ReturnType<typeof useAccounts>[0]
+  account: any
   onClose: () => void
 }) {
-  const health = useAccountHealth(accountId)
+  const { data: health } = useAccountHealthQuery(accountId)
 
-  const chartData = health.monthlyRevenue.map((m) => ({
+  if (!health) {
+    return (
+      <motion.aside
+        initial={{ opacity: 0, x: 40 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: 40 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+        className="w-[360px] shrink-0 card flex items-center justify-center"
+      >
+        <p className="text-sm text-gray-400">Yükleniyor...</p>
+      </motion.aside>
+    )
+  }
+
+  const chartData = health.monthlyRevenue.map((m: any) => ({
     name: m.month,
     gelir: parseInt(m.amount),
   }))
