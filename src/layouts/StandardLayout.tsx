@@ -55,11 +55,13 @@ function buildBreadcrumbs(pathname: string): { label: string; href: string }[] {
     '/accounts': 'Cariler',
     '/orders': 'Siparişler',
     '/inventory': 'Ürün Kataloğu',
-    '/shipments': 'Sevkiyat',
-    '/commissions': 'Acente Hakedişleri',
+    '/stock-analysis': 'Stok & Analiz',
+    '/invoices': 'Faturalar',
+    '/commissions': 'Komisyonlar',
+    '/performance': 'Performans',
+    '/accounting': 'Muhasebe',
     '/profit': 'Kâr Analizi',
-    '/ledger': 'Muhasebe',
-    '/documents': 'Belgeler',
+    '/reports': 'Raporlar',
   }
 
   if (pathname === '/') {
