@@ -8,6 +8,8 @@ import {
   ShoppingCart,
   Truck,
   BookOpen,
+  BarChart3,
+  Handshake,
 } from 'lucide-react'
 
 const commands = [
@@ -15,6 +17,8 @@ const commands = [
   { id: 'accounts', label: 'Cariler', icon: Users, path: '/accounts' },
   { id: 'orders', label: 'Siparişler', icon: ShoppingCart, path: '/orders' },
   { id: 'shipments', label: 'Sevkiyat', icon: Truck, path: '/shipments' },
+  { id: 'commissions', label: 'Acente Hakedişleri', icon: Handshake, path: '/commissions' },
+  { id: 'profit', label: 'Kâr Analizi', icon: BarChart3, path: '/profit' },
   { id: 'ledger', label: 'Muhasebe', icon: BookOpen, path: '/ledger' },
 ]
 

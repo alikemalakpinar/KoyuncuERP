@@ -4,9 +4,11 @@ import { Search, Plus, CreditCard, ChevronRight } from 'lucide-react'
 interface Props {
   breadcrumbs: { label: string; href: string }[]
   onSearchClick: () => void
+  onNewOrder?: () => void
+  onNewPayment?: () => void
 }
 
-export default function Header({ breadcrumbs, onSearchClick }: Props) {
+export default function Header({ breadcrumbs, onSearchClick, onNewOrder, onNewPayment }: Props) {
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-border dark:border-border-dark px-6">
       {/* Breadcrumbs */}
@@ -47,11 +49,17 @@ export default function Header({ breadcrumbs, onSearchClick }: Props) {
         </button>
 
         {/* Quick actions */}
-        <button className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-brand-700 transition-colors">
+        <button
+          onClick={onNewOrder}
+          className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-brand-700 transition-colors"
+        >
           <Plus className="h-3.5 w-3.5" />
           Yeni Sipariş
         </button>
-        <button className="flex items-center gap-1.5 rounded-xl border border-border dark:border-border-dark px-3 py-1.5 text-[13px] font-medium text-gray-700 dark:text-gray-300 hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary transition-colors">
+        <button
+          onClick={onNewPayment}
+          className="flex items-center gap-1.5 rounded-xl border border-border dark:border-border-dark px-3 py-1.5 text-[13px] font-medium text-gray-700 dark:text-gray-300 hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary transition-colors"
+        >
           <CreditCard className="h-3.5 w-3.5" />
           Tahsilat
         </button>
