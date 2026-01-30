@@ -14,10 +14,10 @@ import {
   Tooltip,
   CartesianGrid,
 } from 'recharts'
-import { useAgencyPerformance } from '../hooks/useAnalytics'
+import { useAgencyPerformanceQuery } from '../hooks/useIpc'
 
 export default function AgencyCommissionsPage() {
-  const agencies = useAgencyPerformance()
+  const { data: agencies = [] } = useAgencyPerformanceQuery()
 
   const totalCommission = agencies.reduce(
     (sum, a) => sum + parseFloat(a.commission.replace(/,/g, '')),

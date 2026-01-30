@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X } from 'lucide-react'
+import { X, AlertCircle } from 'lucide-react'
+import { paymentSchema, formatZodErrors } from '../../lib/validation'
+import { useRecordCollection, useRecordPayment, useAccountsQuery } from '../../hooks/useIpc'
 
 interface Props {
   open: boolean
@@ -8,12 +10,54 @@ interface Props {
 }
 
 export default function NewPaymentModal({ open, onClose }: Props) {
-  const [account, setAccount] = useState('')
+  const { data: accounts = [] } = useAccountsQuery()
+  const recordCollection = useRecordCollection()
+  const recordPayment = useRecordPayment()
+
+  const [accountId, setAccountId] = useState('')
   const [amount, setAmount] = useState('')
   const [currency, setCurrency] = useState('USD')
   const [exchangeRate, setExchangeRate] = useState('1.0000')
   const [paymentType, setPaymentType] = useState<'COLLECTION' | 'PAYMENT'>('COLLECTION')
   const [description, setDescription] = useState('')
+  const [errors, setErrors] = useState<Record<string, string>>({})
+
+  const mutation = paymentType === 'COLLECTION' ? recordCollection : recordPayment
+
+  const handleSubmit = () => {
+    const data = {
+      accountId,
+      amount,
+      currency,
+      exchangeRate,
+      description,
+    }
+
+    const result = paymentSchema.safeParse(data)
+    if (!result.success) {
+      setErrors(formatZodErrors(result.error))
+      return
+    }
+
+    setErrors({})
+    mutation.mutate(result.data, {
+      onSuccess: (res: any) => {
+        if (res.success) {
+          resetForm()
+          onClose()
+        }
+      },
+    })
+  }
+
+  const resetForm = () => {
+    setAccountId('')
+    setAmount('')
+    setCurrency('USD')
+    setExchangeRate('1.0000')
+    setDescription('')
+    setErrors({})
+  }
 
   return (
     <AnimatePresence>
@@ -77,12 +121,23 @@ export default function NewPaymentModal({ open, onClose }: Props) {
                 <label className="block text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-1.5">
                   Cari Hesap
                 </label>
-                <input
-                  value={account}
-                  onChange={(e) => setAccount(e.target.value)}
-                  placeholder="Cari seçin..."
-                  className="w-full rounded-xl border border-border dark:border-border-dark bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 transition text-gray-900 dark:text-white placeholder:text-gray-400"
-                />
+                <select
+                  value={accountId}
+                  onChange={(e) => setAccountId(e.target.value)}
+                  className={`w-full rounded-xl border ${errors.accountId ? 'border-red-400' : 'border-border dark:border-border-dark'} bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 transition text-gray-900 dark:text-white`}
+                >
+                  <option value="">Seçiniz...</option>
+                  {accounts.map((a: any) => (
+                    <option key={a.id} value={a.id}>
+                      {a.code} – {a.name}
+                    </option>
+                  ))}
+                </select>
+                {errors.accountId && (
+                  <p className="mt-1 flex items-center gap-1 text-[11px] text-red-500">
+                    <AlertCircle className="h-3 w-3" /> {errors.accountId}
+                  </p>
+                )}
               </div>
 
               {/* Amount & Currency */}
@@ -97,8 +152,11 @@ export default function NewPaymentModal({ open, onClose }: Props) {
                     placeholder="0.00"
                     type="number"
                     step="0.01"
-                    className="w-full rounded-xl border border-border dark:border-border-dark bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 transition text-gray-900 dark:text-white placeholder:text-gray-400 tabular-nums"
+                    className={`w-full rounded-xl border ${errors.amount ? 'border-red-400' : 'border-border dark:border-border-dark'} bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 transition text-gray-900 dark:text-white placeholder:text-gray-400 tabular-nums`}
                   />
+                  {errors.amount && (
+                    <p className="mt-1 text-[11px] text-red-500">{errors.amount}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-1.5">
@@ -126,8 +184,11 @@ export default function NewPaymentModal({ open, onClose }: Props) {
                   onChange={(e) => setExchangeRate(e.target.value)}
                   type="number"
                   step="0.0001"
-                  className="w-full rounded-xl border border-border dark:border-border-dark bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 transition text-gray-900 dark:text-white tabular-nums"
+                  className={`w-full rounded-xl border ${errors.exchangeRate ? 'border-red-400' : 'border-border dark:border-border-dark'} bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 transition text-gray-900 dark:text-white tabular-nums`}
                 />
+                {errors.exchangeRate && (
+                  <p className="mt-1 text-[11px] text-red-500">{errors.exchangeRate}</p>
+                )}
               </div>
 
               {/* Description */}
@@ -140,8 +201,11 @@ export default function NewPaymentModal({ open, onClose }: Props) {
                   onChange={(e) => setDescription(e.target.value)}
                   rows={2}
                   placeholder="Ödeme açıklaması..."
-                  className="w-full rounded-xl border border-border dark:border-border-dark bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 transition resize-none text-gray-900 dark:text-white placeholder:text-gray-400"
+                  className={`w-full rounded-xl border ${errors.description ? 'border-red-400' : 'border-border dark:border-border-dark'} bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 transition resize-none text-gray-900 dark:text-white placeholder:text-gray-400`}
                 />
+                {errors.description && (
+                  <p className="mt-1 text-[11px] text-red-500">{errors.description}</p>
+                )}
               </div>
             </div>
 
@@ -151,10 +215,18 @@ export default function NewPaymentModal({ open, onClose }: Props) {
                 onClick={onClose}
                 className="rounded-xl border border-border dark:border-border-dark px-4 py-2 text-[13px] font-medium text-gray-700 dark:text-gray-300 hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary transition-colors"
               >
-                Iptal
+                İptal
               </button>
-              <button className="rounded-xl bg-brand-600 px-4 py-2 text-[13px] font-medium text-white hover:bg-brand-700 transition-colors">
-                {paymentType === 'COLLECTION' ? 'Tahsilat Kaydet' : 'Ödeme Kaydet'}
+              <button
+                onClick={handleSubmit}
+                disabled={mutation.isPending}
+                className="rounded-xl bg-brand-600 px-4 py-2 text-[13px] font-medium text-white hover:bg-brand-700 transition-colors disabled:opacity-50"
+              >
+                {mutation.isPending
+                  ? 'Kaydediliyor...'
+                  : paymentType === 'COLLECTION'
+                    ? 'Tahsilat Kaydet'
+                    : 'Ödeme Kaydet'}
               </button>
             </div>
           </motion.div>

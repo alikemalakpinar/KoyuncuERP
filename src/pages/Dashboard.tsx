@@ -13,27 +13,7 @@ import {
   Bar,
 } from 'recharts'
 import KpiCard from '../components/KpiCard'
-
-const revenueData = [
-  { v: 42 }, { v: 58 }, { v: 45 }, { v: 72 }, { v: 65 },
-  { v: 80 }, { v: 78 }, { v: 92 }, { v: 88 }, { v: 95 },
-  { v: 102 }, { v: 110 },
-]
-
-const collectionData = [
-  { v: 65 }, { v: 72 }, { v: 80 }, { v: 75 }, { v: 85 },
-  { v: 88 }, { v: 92 }, { v: 90 },
-]
-
-const shipmentData = [
-  { v: 3 }, { v: 5 }, { v: 2 }, { v: 7 }, { v: 4 },
-  { v: 6 }, { v: 8 }, { v: 5 },
-]
-
-const overdueData = [
-  { v: 12 }, { v: 8 }, { v: 15 }, { v: 10 }, { v: 6 },
-  { v: 9 }, { v: 4 }, { v: 7 },
-]
+import { useDashboardKpisQuery } from '../hooks/useIpc'
 
 const MiniArea = ({ data, color }: { data: { v: number }[]; color: string }) => (
   <ResponsiveContainer width="100%" height="100%">
@@ -63,7 +43,24 @@ const MiniBar = ({ data, color }: { data: { v: number }[]; color: string }) => (
   </ResponsiveContainer>
 )
 
+const defaultChartData = [
+  { v: 42 }, { v: 58 }, { v: 45 }, { v: 72 }, { v: 65 },
+  { v: 80 }, { v: 78 }, { v: 92 }, { v: 88 }, { v: 95 },
+  { v: 102 }, { v: 110 },
+]
+
 export default function Dashboard() {
+  const { data: kpis } = useDashboardKpisQuery()
+
+  const revenue = kpis?.monthlyRevenue ?? '$284,520'
+  const revenueChange = kpis?.revenueChange ?? '+12.5%'
+  const collectionRate = kpis?.collectionRate ?? '%87.3'
+  const collectionChange = kpis?.collectionChange ?? '+3.2%'
+  const pendingShipments = kpis?.pendingShipments ?? '14'
+  const shipmentNote = kpis?.shipmentNote ?? '3 acil'
+  const overdueAmount = kpis?.overdueAmount ?? '$42,180'
+  const overdueChange = kpis?.overdueChange ?? '-8.1%'
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -83,35 +80,35 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           title="Aylık Gelir"
-          value="$284,520"
-          change="+12.5%"
+          value={revenue}
+          change={revenueChange}
           changeType="positive"
           icon={DollarSign}
-          chart={<MiniArea data={revenueData} color="#4c6ef5" />}
+          chart={<MiniArea data={defaultChartData} color="#4c6ef5" />}
         />
         <KpiCard
           title="Tahsilat Oranı"
-          value="%87.3"
-          change="+3.2%"
+          value={collectionRate}
+          change={collectionChange}
           changeType="positive"
           icon={TrendingUp}
-          chart={<MiniArea data={collectionData} color="#40c057" />}
+          chart={<MiniArea data={defaultChartData.slice(0, 8)} color="#40c057" />}
         />
         <KpiCard
           title="Bekleyen Sevkiyat"
-          value="14"
-          change="3 acil"
+          value={pendingShipments}
+          change={shipmentNote}
           changeType="neutral"
           icon={Truck}
-          chart={<MiniBar data={shipmentData} color="#748ffc" />}
+          chart={<MiniBar data={defaultChartData.slice(0, 8)} color="#748ffc" />}
         />
         <KpiCard
           title="Vadesi Geçen Alacaklar"
-          value="$42,180"
-          change="-8.1%"
+          value={overdueAmount}
+          change={overdueChange}
           changeType="negative"
           icon={AlertCircle}
-          chart={<MiniBar data={overdueData} color="#fa5252" />}
+          chart={<MiniBar data={defaultChartData.slice(0, 8)} color="#fa5252" />}
         />
       </div>
     </motion.div>

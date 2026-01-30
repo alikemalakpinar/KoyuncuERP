@@ -11,7 +11,7 @@ import {
   CartesianGrid,
   Cell,
 } from 'recharts'
-import { useProfitAnalysis } from '../hooks/useAnalytics'
+import { useProfitAnalysisQuery } from '../hooks/useIpc'
 
 const statusLabels: Record<string, string> = {
   DELIVERED: 'Teslim Edildi',
@@ -30,7 +30,7 @@ const statusColors: Record<string, string> = {
 type SortKey = 'netProfit' | 'netMargin' | 'sellingPrice'
 
 export default function ProfitAnalysisPage() {
-  const orders = useProfitAnalysis()
+  const { data: orders = [] } = useProfitAnalysisQuery()
   const [sortKey, setSortKey] = useState<SortKey>('netProfit')
   const [sortAsc, setSortAsc] = useState(false)
 

@@ -1,5 +1,9 @@
-import { app, BrowserWindow } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import path from 'path'
+import { registerAccountHandlers } from './ipc/accounts'
+import { registerOrderHandlers } from './ipc/orders'
+import { registerLedgerHandlers } from './ipc/ledger'
+import { registerAnalyticsHandlers } from './ipc/analytics'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -29,7 +33,17 @@ function createWindow() {
   })
 }
 
-app.whenReady().then(createWindow)
+function registerIpcHandlers() {
+  registerAccountHandlers(ipcMain)
+  registerOrderHandlers(ipcMain)
+  registerLedgerHandlers(ipcMain)
+  registerAnalyticsHandlers(ipcMain)
+}
+
+app.whenReady().then(() => {
+  registerIpcHandlers()
+  createWindow()
+})
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
