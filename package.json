@@ -2,6 +2,7 @@
   "name": "koyuncu-erp",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Koyuncu Halı ERP – AICO Edition",
   "main": "dist-electron/main.js",
   "scripts": {
