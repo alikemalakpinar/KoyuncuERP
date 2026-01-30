@@ -62,6 +62,8 @@ function buildBreadcrumbs(pathname: string): { label: string; href: string }[] {
     '/accounting': 'Muhasebe',
     '/profit': 'Kâr Analizi',
     '/reports': 'Raporlar',
+    '/settings': 'Ayarlar',
+    '/activity': 'Aktivite Günlüğü',
   }
 
   if (pathname === '/') {
