@@ -8,6 +8,8 @@ import {
   BookOpen,
   FileText,
   Settings,
+  BarChart3,
+  Handshake,
 } from 'lucide-react'
 
 const navItems = [
@@ -15,6 +17,8 @@ const navItems = [
   { to: '/accounts', icon: Users, label: 'Cariler' },
   { to: '/orders', icon: ShoppingCart, label: 'Siparişler' },
   { to: '/shipments', icon: Truck, label: 'Sevkiyat' },
+  { to: '/commissions', icon: Handshake, label: 'Acente Hakedişleri' },
+  { to: '/profit', icon: BarChart3, label: 'Kâr Analizi' },
   { to: '/ledger', icon: BookOpen, label: 'Muhasebe' },
   { to: '/documents', icon: FileText, label: 'Belgeler' },
 ]

@@ -10,25 +10,32 @@ datasource db {
 // ─── Accounts (Cari) ──────────────────────────────────────
 
 model Account {
-  id            String   @id @default(cuid())
-  code          String   @unique
-  name          String
-  type          AccountType
-  taxId         String?  @map("tax_id")
-  phone         String?
-  email         String?
-  address       String?
-  city          String?
-  country       String   @default("TR")
-  currency      String   @default("USD")
-  riskLimit     Decimal  @default(0) @map("risk_limit") @db.Decimal(15, 2)
-  currentBalance Decimal @default(0) @map("current_balance") @db.Decimal(15, 2)
-  isActive      Boolean  @default(true) @map("is_active")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id              String      @id @default(cuid())
+  code            String      @unique
+  name            String
+  type            AccountType
+  taxId           String?     @map("tax_id")
+  phone           String?
+  email           String?
+  address         String?
+  city            String?
+  country         String      @default("TR")
+  currency        String      @default("USD")
+  riskLimit       Decimal     @default(0) @map("risk_limit") @db.Decimal(15, 2)
+  currentBalance  Decimal     @default(0) @map("current_balance") @db.Decimal(15, 2)
+  paymentTermDays Int         @default(30) @map("payment_term_days")
+  isActive        Boolean     @default(true) @map("is_active")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
 
-  orders        Order[]
-  ledgerEntries LedgerEntry[]
+  // Acente hiyerarşisi
+  parentAccountId String?     @map("parent_account_id")
+  parentAccount   Account?    @relation("AccountHierarchy", fields: [parentAccountId], references: [id])
+  childAccounts   Account[]   @relation("AccountHierarchy")
+
+  orders          Order[]
+  ledgerEntries   LedgerEntry[]
+  agency          Agency?
 
   @@map("accounts")
 }
@@ -37,27 +44,94 @@ enum AccountType {
   CUSTOMER
   SUPPLIER
   BOTH
+  AGENCY
+}
+
+// ─── Agency (Acente) ──────────────────────────────────────
+
+model Agency {
+  id                String   @id @default(cuid())
+  accountId         String   @unique @map("account_id")
+  account           Account  @relation(fields: [accountId], references: [id])
+  region            String?
+  defaultCommission Decimal  @default(0) @map("default_commission") @db.Decimal(5, 2)
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  staff             AgencyStaff[]
+  commissionConfigs CommissionConfig[]
+  commissionRecords CommissionRecord[]
+
+  @@map("agencies")
+}
+
+model AgencyStaff {
+  id              String   @id @default(cuid())
+  agencyId        String   @map("agency_id")
+  agency          Agency   @relation(fields: [agencyId], references: [id])
+  name            String
+  email           String?
+  phone           String?
+  staffCommission Decimal  @default(0) @map("staff_commission") @db.Decimal(5, 2)
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  orders            Order[]
+  commissionRecords CommissionRecord[]
+
+  @@map("agency_staff")
+}
+
+model CommissionConfig {
+  id             String    @id @default(cuid())
+  agencyId       String    @map("agency_id")
+  agency         Agency    @relation(fields: [agencyId], references: [id])
+  productGroup   String?   @map("product_group")
+  region         String?
+  commissionRate Decimal   @map("commission_rate") @db.Decimal(5, 2)
+  validFrom      DateTime  @default(now()) @map("valid_from")
+  validTo        DateTime? @map("valid_to")
+  isActive       Boolean   @default(true) @map("is_active")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@index([agencyId, productGroup])
+  @@map("commission_configs")
 }
 
 // ─── Orders ────────────────────────────────────────────────
 
 model Order {
-  id            String      @id @default(cuid())
-  orderNo       String      @unique @map("order_no")
-  accountId     String      @map("account_id")
-  account       Account     @relation(fields: [accountId], references: [id])
-  status        OrderStatus @default(DRAFT)
-  currency      String      @default("USD")
-  totalAmount   Decimal     @default(0) @map("total_amount") @db.Decimal(15, 2)
-  vatAmount     Decimal     @default(0) @map("vat_amount") @db.Decimal(15, 2)
-  grandTotal    Decimal     @default(0) @map("grand_total") @db.Decimal(15, 2)
-  notes         String?
-  isCancelled   Boolean     @default(false) @map("is_cancelled")
-  createdAt     DateTime    @default(now()) @map("created_at")
-  updatedAt     DateTime    @updatedAt @map("updated_at")
+  id                   String      @id @default(cuid())
+  orderNo              String      @unique @map("order_no")
+  accountId            String      @map("account_id")
+  account              Account     @relation(fields: [accountId], references: [id])
+  status               OrderStatus @default(DRAFT)
+  currency             String      @default("USD")
+  totalAmount          Decimal     @default(0) @map("total_amount") @db.Decimal(15, 2)
+  vatRate              Decimal     @default(0) @map("vat_rate") @db.Decimal(5, 2)
+  vatAmount            Decimal     @default(0) @map("vat_amount") @db.Decimal(15, 2)
+  grandTotal           Decimal     @default(0) @map("grand_total") @db.Decimal(15, 2)
 
-  items         OrderItem[]
-  shipments     Shipment[]
+  // Acente komisyon alanları
+  agencyStaffId        String?     @map("agency_staff_id")
+  agencyStaff          AgencyStaff? @relation(fields: [agencyStaffId], references: [id])
+  agencyCommissionRate Decimal     @default(0) @map("agency_commission_rate") @db.Decimal(5, 2)
+  staffCommissionRate  Decimal     @default(0) @map("staff_commission_rate") @db.Decimal(5, 2)
+
+  // Kur bilgisi
+  orderExchangeRate    Decimal     @default(1) @map("order_exchange_rate") @db.Decimal(10, 4)
+
+  notes                String?
+  isCancelled          Boolean     @default(false) @map("is_cancelled")
+  createdAt            DateTime    @default(now()) @map("created_at")
+  updatedAt            DateTime    @updatedAt @map("updated_at")
+
+  items             OrderItem[]
+  shipments         Shipment[]
+  landedCosts       LandedCost[]
+  commissionRecords CommissionRecord[]
 
   @@map("orders")
 }
@@ -74,36 +148,98 @@ enum OrderStatus {
 }
 
 model OrderItem {
-  id          String  @id @default(cuid())
-  orderId     String  @map("order_id")
-  order       Order   @relation(fields: [orderId], references: [id])
-  productName String  @map("product_name")
-  sku         String?
-  quantity    Decimal @db.Decimal(10, 2)
-  unit        String  @default("m2")
-  unitPrice   Decimal @map("unit_price") @db.Decimal(15, 2)
-  totalPrice  Decimal @map("total_price") @db.Decimal(15, 2)
+  id            String  @id @default(cuid())
+  orderId       String  @map("order_id")
+  order         Order   @relation(fields: [orderId], references: [id])
+  productName   String  @map("product_name")
+  productGroup  String? @map("product_group")
+  sku           String?
+  quantity      Decimal @db.Decimal(10, 2)
+  unit          String  @default("m2")
+  unitPrice     Decimal @map("unit_price") @db.Decimal(15, 2)
+  totalPrice    Decimal @map("total_price") @db.Decimal(15, 2)
+  purchasePrice Decimal @default(0) @map("purchase_price") @db.Decimal(15, 2)
 
   @@map("order_items")
+}
+
+// ─── Landed Cost (Toplam Maliyet Analizi) ─────────────────
+
+model LandedCost {
+  id           String         @id @default(cuid())
+  orderId      String         @map("order_id")
+  order        Order          @relation(fields: [orderId], references: [id])
+  costType     LandedCostType
+  amount       Decimal        @db.Decimal(15, 2)
+  currency     String         @default("USD")
+  exchangeRate Decimal        @default(1) @map("exchange_rate") @db.Decimal(10, 4)
+  description  String?
+  isCancelled  Boolean        @default(false) @map("is_cancelled")
+  createdAt    DateTime       @default(now()) @map("created_at")
+
+  @@index([orderId])
+  @@map("landed_costs")
+}
+
+enum LandedCostType {
+  PURCHASE
+  FREIGHT
+  CUSTOMS_TAX
+  WAREHOUSE
+  INSURANCE
+  AGENCY_FEE
+  OTHER
+}
+
+// ─── Commission Records (Hakediş Kayıtları) ──────────────
+
+model CommissionRecord {
+  id               String           @id @default(cuid())
+  orderId          String           @map("order_id")
+  order            Order            @relation(fields: [orderId], references: [id])
+  agencyId         String           @map("agency_id")
+  agency           Agency           @relation(fields: [agencyId], references: [id])
+  agencyStaffId    String?          @map("agency_staff_id")
+  agencyStaff      AgencyStaff?     @relation(fields: [agencyStaffId], references: [id])
+  commissionRate   Decimal          @map("commission_rate") @db.Decimal(5, 2)
+  baseAmount       Decimal          @map("base_amount") @db.Decimal(15, 2)
+  commissionAmount Decimal          @map("commission_amount") @db.Decimal(15, 2)
+  status           CommissionStatus @default(PENDING)
+  paidAt           DateTime?        @map("paid_at")
+  isCancelled      Boolean          @default(false) @map("is_cancelled")
+  createdAt        DateTime         @default(now()) @map("created_at")
+
+  @@index([agencyId, status])
+  @@map("commission_records")
+}
+
+enum CommissionStatus {
+  PENDING
+  APPROVED
+  PAID
+  CANCELLED
 }
 
 // ─── Shipments ─────────────────────────────────────────────
 
 model Shipment {
-  id              String         @id @default(cuid())
-  shipmentNo      String         @unique @map("shipment_no")
-  orderId         String         @map("order_id")
-  order           Order          @relation(fields: [orderId], references: [id])
-  status          ShipmentStatus @default(PREPARING)
-  origin          String         @default("TR")
-  destination     String
-  containerNo     String?        @map("container_no")
-  trackingNo      String?        @map("tracking_no")
-  estimatedArrival DateTime?     @map("estimated_arrival")
-  actualArrival   DateTime?      @map("actual_arrival")
-  isCancelled     Boolean        @default(false) @map("is_cancelled")
-  createdAt       DateTime       @default(now()) @map("created_at")
-  updatedAt       DateTime       @updatedAt @map("updated_at")
+  id               String         @id @default(cuid())
+  shipmentNo       String         @unique @map("shipment_no")
+  orderId          String         @map("order_id")
+  order            Order          @relation(fields: [orderId], references: [id])
+  status           ShipmentStatus @default(PREPARING)
+  origin           String         @default("TR")
+  destination      String
+  containerNo      String?        @map("container_no")
+  trackingNo       String?        @map("tracking_no")
+  estimatedArrival DateTime?      @map("estimated_arrival")
+  actualArrival    DateTime?      @map("actual_arrival")
+  freightCost      Decimal        @default(0) @map("freight_cost") @db.Decimal(15, 2)
+  insuranceCost    Decimal        @default(0) @map("insurance_cost") @db.Decimal(15, 2)
+  customsCost      Decimal        @default(0) @map("customs_cost") @db.Decimal(15, 2)
+  isCancelled      Boolean        @default(false) @map("is_cancelled")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
 
   @@map("shipments")
 }
@@ -122,22 +258,25 @@ enum ShipmentStatus {
 // ─── Ledger (Source of Truth) ──────────────────────────────
 
 model LedgerEntry {
-  id          String      @id @default(cuid())
-  entryNo     String      @unique @map("entry_no")
-  accountId   String      @map("account_id")
-  account     Account     @relation(fields: [accountId], references: [id])
-  type        LedgerType
-  debit       Decimal     @default(0) @db.Decimal(15, 2)
-  credit      Decimal     @default(0) @db.Decimal(15, 2)
-  currency    String      @default("USD")
-  exchangeRate Decimal    @default(1) @map("exchange_rate") @db.Decimal(10, 4)
-  description String
-  referenceId String?     @map("reference_id")
-  referenceType String?   @map("reference_type")
-  isCancelled Boolean     @default(false) @map("is_cancelled")
-  createdAt   DateTime    @default(now()) @map("created_at")
+  id            String     @id @default(cuid())
+  entryNo       String     @unique @map("entry_no")
+  accountId     String     @map("account_id")
+  account       Account    @relation(fields: [accountId], references: [id])
+  type          LedgerType
+  debit         Decimal    @default(0) @db.Decimal(15, 2)
+  credit        Decimal    @default(0) @db.Decimal(15, 2)
+  currency      String     @default("USD")
+  exchangeRate  Decimal    @default(1) @map("exchange_rate") @db.Decimal(10, 4)
+  costCenter    String?    @map("cost_center")
+  description   String
+  referenceId   String?    @map("reference_id")
+  referenceType String?    @map("reference_type")
+  isCancelled   Boolean    @default(false) @map("is_cancelled")
+  createdAt     DateTime   @default(now()) @map("created_at")
 
   @@index([accountId, createdAt])
+  @@index([costCenter])
+  @@index([referenceId, referenceType])
   @@map("ledger_entries")
 }
 
@@ -147,6 +286,8 @@ enum LedgerType {
   COLLECTION
   REVERSAL
   ADJUSTMENT
+  COMMISSION
+  FX_GAIN_LOSS
 }
 
 // ─── Documents ─────────────────────────────────────────────
@@ -168,4 +309,18 @@ enum DocumentType {
   INVOICE
   PACKING_LIST
   CREDIT_NOTE
+}
+
+// ─── Exchange Rates (Kur Tablosu) ─────────────────────────
+
+model ExchangeRate {
+  id           String   @id @default(cuid())
+  fromCurrency String   @map("from_currency")
+  toCurrency   String   @map("to_currency")
+  rate         Decimal  @db.Decimal(10, 4)
+  date         DateTime @db.Date
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([fromCurrency, toCurrency, date])
+  @@map("exchange_rates")
 }

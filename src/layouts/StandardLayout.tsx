@@ -6,9 +6,11 @@ import CommandPalette from '../components/CommandPalette'
 
 interface Props {
   children: ReactNode
+  onNewOrder?: () => void
+  onNewPayment?: () => void
 }
 
-export default function StandardLayout({ children }: Props) {
+export default function StandardLayout({ children, onNewOrder, onNewPayment }: Props) {
   const [commandOpen, setCommandOpen] = useState(false)
   const location = useLocation()
 
@@ -33,6 +35,8 @@ export default function StandardLayout({ children }: Props) {
         <Header
           breadcrumbs={breadcrumbs}
           onSearchClick={() => setCommandOpen(true)}
+          onNewOrder={onNewOrder}
+          onNewPayment={onNewPayment}
         />
 
         <main className="flex-1 overflow-y-auto p-6">
@@ -50,6 +54,11 @@ function buildBreadcrumbs(pathname: string): { label: string; href: string }[] {
     '/': 'Gösterge Paneli',
     '/accounts': 'Cariler',
     '/orders': 'Siparişler',
+    '/shipments': 'Sevkiyat',
+    '/commissions': 'Acente Hakedişleri',
+    '/profit': 'Kâr Analizi',
+    '/ledger': 'Muhasebe',
+    '/documents': 'Belgeler',
   }
 
   if (pathname === '/') {

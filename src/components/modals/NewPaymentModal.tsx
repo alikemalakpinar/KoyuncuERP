@@ -1,0 +1,165 @@
+import { useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { X } from 'lucide-react'
+
+interface Props {
+  open: boolean
+  onClose: () => void
+}
+
+export default function NewPaymentModal({ open, onClose }: Props) {
+  const [account, setAccount] = useState('')
+  const [amount, setAmount] = useState('')
+  const [currency, setCurrency] = useState('USD')
+  const [exchangeRate, setExchangeRate] = useState('1.0000')
+  const [paymentType, setPaymentType] = useState<'COLLECTION' | 'PAYMENT'>('COLLECTION')
+  const [description, setDescription] = useState('')
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/30 backdrop-blur-sm"
+            onClick={onClose}
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            className="fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white dark:bg-surface-dark-secondary shadow-glass border border-border dark:border-border-dark overflow-hidden"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-border dark:border-border-dark px-6 py-4">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-white">
+                Tahsilat / Ödeme
+              </h2>
+              <button
+                onClick={onClose}
+                className="rounded-lg p-1 hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary transition-colors"
+              >
+                <X className="h-4 w-4 text-gray-400" />
+              </button>
+            </div>
+
+            {/* Form */}
+            <div className="px-6 py-5 space-y-4">
+              {/* Type Toggle */}
+              <div className="flex rounded-xl bg-surface-secondary dark:bg-surface-dark-tertiary p-1">
+                <button
+                  onClick={() => setPaymentType('COLLECTION')}
+                  className={`flex-1 rounded-lg py-2 text-[13px] font-medium transition-colors ${
+                    paymentType === 'COLLECTION'
+                      ? 'bg-white dark:bg-surface-dark shadow-soft text-brand-600'
+                      : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                  }`}
+                >
+                  Tahsilat
+                </button>
+                <button
+                  onClick={() => setPaymentType('PAYMENT')}
+                  className={`flex-1 rounded-lg py-2 text-[13px] font-medium transition-colors ${
+                    paymentType === 'PAYMENT'
+                      ? 'bg-white dark:bg-surface-dark shadow-soft text-brand-600'
+                      : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                  }`}
+                >
+                  Ödeme
+                </button>
+              </div>
+
+              {/* Account */}
+              <div>
+                <label className="block text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-1.5">
+                  Cari Hesap
+                </label>
+                <input
+                  value={account}
+                  onChange={(e) => setAccount(e.target.value)}
+                  placeholder="Cari seçin..."
+                  className="w-full rounded-xl border border-border dark:border-border-dark bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 transition text-gray-900 dark:text-white placeholder:text-gray-400"
+                />
+              </div>
+
+              {/* Amount & Currency */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-1.5">
+                    Tutar
+                  </label>
+                  <input
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="0.00"
+                    type="number"
+                    step="0.01"
+                    className="w-full rounded-xl border border-border dark:border-border-dark bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 transition text-gray-900 dark:text-white placeholder:text-gray-400 tabular-nums"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-1.5">
+                    Para Birimi
+                  </label>
+                  <select
+                    value={currency}
+                    onChange={(e) => setCurrency(e.target.value)}
+                    className="w-full rounded-xl border border-border dark:border-border-dark bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 transition text-gray-900 dark:text-white"
+                  >
+                    <option value="USD">USD ($)</option>
+                    <option value="EUR">EUR</option>
+                    <option value="TRY">TRY</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Exchange Rate */}
+              <div>
+                <label className="block text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-1.5">
+                  Kur (1 {currency} = ? TRY)
+                </label>
+                <input
+                  value={exchangeRate}
+                  onChange={(e) => setExchangeRate(e.target.value)}
+                  type="number"
+                  step="0.0001"
+                  className="w-full rounded-xl border border-border dark:border-border-dark bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 transition text-gray-900 dark:text-white tabular-nums"
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-[12px] font-medium text-gray-500 dark:text-gray-400 mb-1.5">
+                  Açıklama
+                </label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={2}
+                  placeholder="Ödeme açıklaması..."
+                  className="w-full rounded-xl border border-border dark:border-border-dark bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 transition resize-none text-gray-900 dark:text-white placeholder:text-gray-400"
+                />
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2 border-t border-border dark:border-border-dark px-6 py-4">
+              <button
+                onClick={onClose}
+                className="rounded-xl border border-border dark:border-border-dark px-4 py-2 text-[13px] font-medium text-gray-700 dark:text-gray-300 hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary transition-colors"
+              >
+                Iptal
+              </button>
+              <button className="rounded-xl bg-brand-600 px-4 py-2 text-[13px] font-medium text-white hover:bg-brand-700 transition-colors">
+                {paymentType === 'COLLECTION' ? 'Tahsilat Kaydet' : 'Ödeme Kaydet'}
+              </button>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  )
+}
