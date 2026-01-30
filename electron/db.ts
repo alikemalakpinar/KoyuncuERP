@@ -70,6 +70,30 @@ export interface DbClient {
     create: (args: any) => Promise<any>
     findMany: (args?: any) => Promise<any[]>
   }
+  inventoryLot: {
+    findMany: (args?: any) => Promise<any[]>
+    create: (args: any) => Promise<any>
+    update: (args: any) => Promise<any>
+  }
+  inventoryTransaction: {
+    findMany: (args?: any) => Promise<any[]>
+    create: (args: any) => Promise<any>
+  }
+  priceList: {
+    findMany: (args?: any) => Promise<any[]>
+    findUnique: (args: any) => Promise<any>
+    create: (args: any) => Promise<any>
+    update: (args: any) => Promise<any>
+  }
+  priceListItem: {
+    findMany: (args?: any) => Promise<any[]>
+    upsert: (args: any) => Promise<any>
+    create: (args: any) => Promise<any>
+  }
+  periodLock: {
+    findMany: (args?: any) => Promise<any[]>
+    create: (args: any) => Promise<any>
+  }
   $transaction: (fn: (tx: any) => Promise<any>) => Promise<any>
 }
 

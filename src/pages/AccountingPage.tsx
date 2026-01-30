@@ -3,13 +3,16 @@ import { motion } from 'framer-motion'
 import {
   BookOpen, TrendingUp, TrendingDown, DollarSign, ArrowUpRight, ArrowDownRight,
   Download, Filter, Calendar, CreditCard, Wallet, Building2, PiggyBank,
-  ArrowLeftRight, ChevronDown, Search, Eye, FileText,
+  ArrowLeftRight, ChevronDown, Search, Eye, FileText, Lock, RefreshCw,
 } from 'lucide-react'
 import {
   AreaChart, Area, BarChart, Bar, ResponsiveContainer, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell,
 } from 'recharts'
 import { useAuth } from '../contexts/AuthContext'
+import AgingReport from '../components/platinum/AgingReport'
+import PeriodClosing from '../components/platinum/PeriodClosing'
+import FxRevaluation from '../components/platinum/FxRevaluation'
 
 type TabKey = 'overview' | 'ledger' | 'chart_of_accounts' | 'cash_flow' | 'aging' | 'bank'
 
@@ -125,6 +128,8 @@ export default function AccountingPage() {
   const [ledgerFilter, setLedgerFilter] = useState<string>('all')
   const [ledgerSearch, setLedgerSearch] = useState('')
   const [dateRange, setDateRange] = useState('month')
+  const [periodClosingOpen, setPeriodClosingOpen] = useState(false)
+  const [fxRevaluationOpen, setFxRevaluationOpen] = useState(false)
 
   const canViewAccounting = hasPermission('view_accounting')
 
@@ -175,6 +180,20 @@ export default function AccountingPage() {
             <option value="quarter">Bu Çeyrek</option>
             <option value="year">Bu Yıl</option>
           </select>
+          <button
+            onClick={() => setFxRevaluationOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/10 px-3 py-2 text-sm font-medium text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/20 transition-colors"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Kur Değerleme
+          </button>
+          <button
+            onClick={() => setPeriodClosingOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/10 px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/20 transition-colors"
+          >
+            <Lock className="h-4 w-4" />
+            Dönem Kilitle
+          </button>
           <button className="flex items-center gap-1.5 rounded-xl border border-border dark:border-border-dark px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary transition-colors">
             <Download className="h-4 w-4" />
             Dışa Aktar
@@ -504,62 +523,8 @@ export default function AccountingPage() {
         </div>
       )}
 
-      {/* Aging Tab */}
-      {activeTab === 'aging' && (
-        <div className="card overflow-hidden">
-          <div className="p-4 border-b border-border dark:border-border-dark">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Alacak Yaşlandırma Raporu</h3>
-          </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border dark:border-border-dark bg-surface-secondary/50 dark:bg-surface-dark-secondary/50">
-                <th className="text-left px-4 py-3 font-medium text-gray-500">Müşteri</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-500">Cari</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-500">1-30 Gün</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-500">31-60 Gün</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-500">61-90 Gün</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-500">90+ Gün</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-500">Toplam</th>
-                <th className="text-center px-4 py-3 font-medium text-gray-500">Risk</th>
-              </tr>
-            </thead>
-            <tbody>
-              {agingData.map((row) => (
-                <tr key={row.customer} className="border-b border-border/50 dark:border-border-dark/50 hover:bg-surface-secondary/30">
-                  <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{row.customer}</td>
-                  <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-400">{row.current > 0 ? formatCurrency(row.current) : '-'}</td>
-                  <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-400">{row.d30 > 0 ? formatCurrency(row.d30) : '-'}</td>
-                  <td className="px-4 py-3 text-right text-yellow-600">{row.d60 > 0 ? formatCurrency(row.d60) : '-'}</td>
-                  <td className="px-4 py-3 text-right text-orange-600">{row.d90 > 0 ? formatCurrency(row.d90) : '-'}</td>
-                  <td className="px-4 py-3 text-right text-red-600 font-medium">{row.d90plus > 0 ? formatCurrency(row.d90plus) : '-'}</td>
-                  <td className="px-4 py-3 text-right font-bold text-gray-900 dark:text-white">{formatCurrency(row.total)}</td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                      row.risk === 'low' ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400' :
-                      row.risk === 'medium' ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400' :
-                      'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400'
-                    }`}>
-                      {row.risk === 'low' ? 'Düşük' : row.risk === 'medium' ? 'Orta' : 'Yüksek'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="bg-surface-secondary/50 dark:bg-surface-dark-secondary/50 font-bold">
-                <td className="px-4 py-3 text-gray-900 dark:text-white">Toplam</td>
-                <td className="px-4 py-3 text-right">{formatCurrency(agingData.reduce((s, r) => s + r.current, 0))}</td>
-                <td className="px-4 py-3 text-right">{formatCurrency(agingData.reduce((s, r) => s + r.d30, 0))}</td>
-                <td className="px-4 py-3 text-right text-yellow-600">{formatCurrency(agingData.reduce((s, r) => s + r.d60, 0))}</td>
-                <td className="px-4 py-3 text-right text-orange-600">{formatCurrency(agingData.reduce((s, r) => s + r.d90, 0))}</td>
-                <td className="px-4 py-3 text-right text-red-600">{formatCurrency(agingData.reduce((s, r) => s + r.d90plus, 0))}</td>
-                <td className="px-4 py-3 text-right text-gray-900 dark:text-white">{formatCurrency(agingData.reduce((s, r) => s + r.total, 0))}</td>
-                <td className="px-4 py-3"></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
-      )}
+      {/* Aging Tab – Platinum AgingReport */}
+      {activeTab === 'aging' && <AgingReport />}
 
       {/* Bank Accounts Tab */}
       {activeTab === 'bank' && (
@@ -601,6 +566,10 @@ export default function AccountingPage() {
           </div>
         </div>
       )}
+
+      {/* Platinum Modals */}
+      <PeriodClosing open={periodClosingOpen} onClose={() => setPeriodClosingOpen(false)} />
+      <FxRevaluation open={fxRevaluationOpen} onClose={() => setFxRevaluationOpen(false)} />
     </motion.div>
   )
 }

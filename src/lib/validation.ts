@@ -119,6 +119,57 @@ export const productCreateSchema = z.object({
 
 export type ProductCreateInput = z.infer<typeof productCreateSchema>
 
+// ── Inventory Lot ────────────────────────────────────────
+
+export const receiveLotSchema = z.object({
+  productId: z.string().min(1, 'Ürün seçimi zorunludur'),
+  variantId: z.string().min(1, 'Varyant seçimi zorunludur'),
+  warehouseId: z.string().min(1, 'Depo seçimi zorunludur'),
+  quantity: positiveDecimal,
+  unitCost: positiveDecimal,
+  batchNo: z.string().optional(),
+})
+
+export type ReceiveLotInput = z.infer<typeof receiveLotSchema>
+
+// ── Price List ───────────────────────────────────────────
+
+export const priceListCreateSchema = z.object({
+  name: z.string().min(2, 'Liste adı en az 2 karakter olmalıdır'),
+  currency: currencyCode.default('USD'),
+  isDefault: z.boolean().default(false),
+})
+
+export type PriceListCreateInput = z.infer<typeof priceListCreateSchema>
+
+export const priceListItemSchema = z.object({
+  priceListId: z.string().min(1, 'Fiyat listesi seçimi zorunludur'),
+  variantId: z.string().min(1, 'Varyant seçimi zorunludur'),
+  price: positiveDecimal,
+  minQuantity: decimalString.default('1'),
+})
+
+export type PriceListItemInput = z.infer<typeof priceListItemSchema>
+
+// ── Period Lock ──────────────────────────────────────────
+
+export const periodLockSchema = z.object({
+  closingDate: z.string().min(1, 'Kapanış tarihi zorunludur'),
+  lockedBy: z.string().min(1, 'Kilitleyen kullanıcı zorunludur'),
+  notes: z.string().optional(),
+})
+
+export type PeriodLockInput = z.infer<typeof periodLockSchema>
+
+// ── FX Revaluation ───────────────────────────────────────
+
+export const fxRevaluationSchema = z.object({
+  rates: z.record(z.string(), z.number().positive('Kur değeri pozitif olmalıdır')),
+  postedBy: z.string().min(1),
+})
+
+export type FxRevaluationInput = z.infer<typeof fxRevaluationSchema>
+
 // ── Helper: format Zod errors ──────────────────────────────
 
 export function formatZodErrors(error: z.ZodError): Record<string, string> {
