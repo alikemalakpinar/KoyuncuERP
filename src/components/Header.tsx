@@ -1,5 +1,12 @@
+import { useState, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Search, Plus, CreditCard, ChevronRight } from 'lucide-react'
+import {
+  Search, Plus, CreditCard, ChevronRight, Bell, Moon, Sun,
+  AlertTriangle, DollarSign, Package, ShoppingCart, CheckCircle,
+  Clock, X,
+} from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { useAuth } from '../contexts/AuthContext'
 
 interface Props {
   breadcrumbs: { label: string; href: string }[]
@@ -8,7 +15,73 @@ interface Props {
   onNewPayment?: () => void
 }
 
+interface Notification {
+  id: string
+  type: 'warning' | 'info' | 'success' | 'error'
+  title: string
+  message: string
+  time: string
+  read: boolean
+}
+
+const demoNotifications: Notification[] = [
+  { id: 'n1', type: 'error', title: 'Vadesi Geçmiş Ödeme', message: 'Desert Home Decor - $33,984 fatura ödemesi 21 gün gecikmiş', time: '5 dk önce', read: false },
+  { id: 'n2', type: 'warning', title: 'Kritik Stok Uyarısı', message: 'Bambu Halı - Doğal: Stok 12 adete düştü (min: 25)', time: '15 dk önce', read: false },
+  { id: 'n3', type: 'success', title: 'Sipariş Teslim Edildi', message: 'ORD-2026-0147 - HomeStyle Inc. siparişi teslim edildi', time: '1 saat önce', read: false },
+  { id: 'n4', type: 'info', title: 'Yeni Sipariş', message: 'Chicago Interiors - $56,100 tutarında yeni sipariş oluşturuldu', time: '2 saat önce', read: true },
+  { id: 'n5', type: 'warning', title: 'Komisyon Onayı Bekliyor', message: 'ABC Trading LLC - $12,340 komisyon onay bekliyor', time: '3 saat önce', read: true },
+  { id: 'n6', type: 'info', title: 'Stok Girişi', message: 'El Dokuma Halı - Kayseri: 40 adet stok girişi yapıldı', time: '4 saat önce', read: true },
+]
+
+const notifIcons = {
+  warning: AlertTriangle,
+  info: ShoppingCart,
+  success: CheckCircle,
+  error: DollarSign,
+}
+
+const notifColors = {
+  warning: 'text-amber-500 bg-amber-50 dark:bg-amber-900/20',
+  info: 'text-blue-500 bg-blue-50 dark:bg-blue-900/20',
+  success: 'text-green-500 bg-green-50 dark:bg-green-900/20',
+  error: 'text-red-500 bg-red-50 dark:bg-red-900/20',
+}
+
 export default function Header({ breadcrumbs, onSearchClick, onNewOrder, onNewPayment }: Props) {
+  const { user, hasPermission } = useAuth()
+  const [showNotifications, setShowNotifications] = useState(false)
+  const [notifications, setNotifications] = useState(demoNotifications)
+  const [darkMode, setDarkMode] = useState(() =>
+    document.documentElement.classList.contains('dark')
+  )
+  const notifRef = useRef<HTMLDivElement>(null)
+
+  const unreadCount = notifications.filter(n => !n.read).length
+
+  const toggleDarkMode = () => {
+    document.documentElement.classList.toggle('dark')
+    setDarkMode(!darkMode)
+  }
+
+  const markAllRead = () => {
+    setNotifications(notifications.map(n => ({ ...n, read: true })))
+  }
+
+  const dismissNotif = (id: string) => {
+    setNotifications(notifications.filter(n => n.id !== id))
+  }
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setShowNotifications(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-border dark:border-border-dark px-6">
       {/* Breadcrumbs */}
@@ -48,21 +121,114 @@ export default function Header({ breadcrumbs, onSearchClick, onNewOrder, onNewPa
           </kbd>
         </button>
 
+        {/* Dark mode toggle */}
+        <button
+          onClick={toggleDarkMode}
+          className="rounded-xl p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary transition-colors"
+        >
+          {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </button>
+
+        {/* Notifications */}
+        <div className="relative" ref={notifRef}>
+          <button
+            onClick={() => setShowNotifications(!showNotifications)}
+            className="relative rounded-xl p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary transition-colors"
+          >
+            <Bell className="h-4 w-4" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
+                {unreadCount}
+              </span>
+            )}
+          </button>
+
+          <AnimatePresence>
+            {showNotifications && (
+              <motion.div
+                initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                transition={{ duration: 0.15 }}
+                className="absolute right-0 top-full mt-2 w-96 rounded-2xl bg-white dark:bg-surface-dark border border-border dark:border-border-dark shadow-xl z-50 overflow-hidden"
+              >
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border dark:border-border-dark">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Bildirimler</h3>
+                  <div className="flex items-center gap-2">
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={markAllRead}
+                        className="text-[11px] text-brand-600 hover:text-brand-700 font-medium"
+                      >
+                        Tümünü okundu işaretle
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="max-h-96 overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <div className="py-8 text-center text-sm text-gray-400">
+                      Bildirim bulunmuyor
+                    </div>
+                  ) : (
+                    notifications.map((notif) => {
+                      const Icon = notifIcons[notif.type]
+                      return (
+                        <div
+                          key={notif.id}
+                          className={`flex items-start gap-3 px-4 py-3 border-b border-border/50 dark:border-border-dark/50 last:border-0 hover:bg-surface-secondary/50 dark:hover:bg-surface-dark-secondary/50 transition-colors ${
+                            !notif.read ? 'bg-brand-50/30 dark:bg-brand-900/5' : ''
+                          }`}
+                        >
+                          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${notifColors[notif.type]}`}>
+                            <Icon className="h-4 w-4" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-[12px] font-semibold text-gray-900 dark:text-white">{notif.title}</p>
+                              {!notif.read && (
+                                <span className="h-1.5 w-1.5 rounded-full bg-brand-500 shrink-0" />
+                              )}
+                            </div>
+                            <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2">{notif.message}</p>
+                            <p className="text-[10px] text-gray-400 mt-1">{notif.time}</p>
+                          </div>
+                          <button
+                            onClick={() => dismissNotif(notif.id)}
+                            className="shrink-0 rounded-md p-1 text-gray-300 hover:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      )
+                    })
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
         {/* Quick actions */}
-        <button
-          onClick={onNewOrder}
-          className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-brand-700 transition-colors"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Yeni Sipariş
-        </button>
-        <button
-          onClick={onNewPayment}
-          className="flex items-center gap-1.5 rounded-xl border border-border dark:border-border-dark px-3 py-1.5 text-[13px] font-medium text-gray-700 dark:text-gray-300 hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary transition-colors"
-        >
-          <CreditCard className="h-3.5 w-3.5" />
-          Tahsilat
-        </button>
+        {hasPermission('create_invoice') && (
+          <>
+            <button
+              onClick={onNewOrder}
+              className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-brand-700 transition-colors"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Yeni Sipariş
+            </button>
+            <button
+              onClick={onNewPayment}
+              className="flex items-center gap-1.5 rounded-xl border border-border dark:border-border-dark px-3 py-1.5 text-[13px] font-medium text-gray-700 dark:text-gray-300 hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary transition-colors"
+            >
+              <CreditCard className="h-3.5 w-3.5" />
+              Tahsilat
+            </button>
+          </>
+        )}
       </div>
     </header>
   )

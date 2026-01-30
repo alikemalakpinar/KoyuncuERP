@@ -16,6 +16,9 @@ import InvoicePage from './pages/InvoicePage'
 import ReportsPage from './pages/ReportsPage'
 import StockAnalysisPage from './pages/StockAnalysisPage'
 import PerformancePage from './pages/PerformancePage'
+import SettingsPage from './pages/SettingsPage'
+import OrderDetailPage from './pages/OrderDetailPage'
+import ActivityLogPage from './pages/ActivityLogPage'
 import NewOrderModal from './components/modals/NewOrderModal'
 import NewPaymentModal from './components/modals/NewPaymentModal'
 import { ToastProvider } from './components/Toast'
@@ -43,6 +46,9 @@ function AuthenticatedApp() {
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/stock-analysis" element={<StockAnalysisPage />} />
           <Route path="/performance" element={<PerformancePage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/orders/:id" element={<OrderDetailPage />} />
+          <Route path="/activity" element={<ActivityLogPage />} />
         </Routes>
       </AnimatePresence>
 

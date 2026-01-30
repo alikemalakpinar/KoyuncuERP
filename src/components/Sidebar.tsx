@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import {
   LayoutDashboard, Users, ShoppingCart, Truck, BookOpen,
   FileText, Settings, BarChart3, Handshake, Package,
-  Receipt, TrendingUp, Award, LogOut, ChevronDown,
+  Receipt, TrendingUp, Award, LogOut, ChevronDown, Activity,
 } from 'lucide-react'
 import { useAuth, roleLabels, type UserRole } from '../contexts/AuthContext'
 
@@ -30,6 +30,8 @@ export default function Sidebar() {
     { to: '/accounting', icon: BookOpen, label: 'Muhasebe', show: hasPermission('view_accounting') },
     { to: '/profit', icon: BarChart3, label: 'Kâr Analizi', show: hasPermission('view_profit') },
     { to: '/reports', icon: FileText, label: 'Raporlar', show: hasPermission('view_reports') },
+    { to: '/activity', icon: Activity, label: 'Aktivite Günlüğü', show: hasPermission('view_accounting') },
+    { to: '/settings', icon: Settings, label: 'Ayarlar', show: true },
   ].filter(item => item.show)
 
   return (
