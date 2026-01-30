@@ -1,0 +1,171 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Accounts (Cari) ──────────────────────────────────────
+
+model Account {
+  id            String   @id @default(cuid())
+  code          String   @unique
+  name          String
+  type          AccountType
+  taxId         String?  @map("tax_id")
+  phone         String?
+  email         String?
+  address       String?
+  city          String?
+  country       String   @default("TR")
+  currency      String   @default("USD")
+  riskLimit     Decimal  @default(0) @map("risk_limit") @db.Decimal(15, 2)
+  currentBalance Decimal @default(0) @map("current_balance") @db.Decimal(15, 2)
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  orders        Order[]
+  ledgerEntries LedgerEntry[]
+
+  @@map("accounts")
+}
+
+enum AccountType {
+  CUSTOMER
+  SUPPLIER
+  BOTH
+}
+
+// ─── Orders ────────────────────────────────────────────────
+
+model Order {
+  id            String      @id @default(cuid())
+  orderNo       String      @unique @map("order_no")
+  accountId     String      @map("account_id")
+  account       Account     @relation(fields: [accountId], references: [id])
+  status        OrderStatus @default(DRAFT)
+  currency      String      @default("USD")
+  totalAmount   Decimal     @default(0) @map("total_amount") @db.Decimal(15, 2)
+  vatAmount     Decimal     @default(0) @map("vat_amount") @db.Decimal(15, 2)
+  grandTotal    Decimal     @default(0) @map("grand_total") @db.Decimal(15, 2)
+  notes         String?
+  isCancelled   Boolean     @default(false) @map("is_cancelled")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  items         OrderItem[]
+  shipments     Shipment[]
+
+  @@map("orders")
+}
+
+enum OrderStatus {
+  DRAFT
+  CONFIRMED
+  IN_PRODUCTION
+  READY
+  PARTIALLY_SHIPPED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+model OrderItem {
+  id          String  @id @default(cuid())
+  orderId     String  @map("order_id")
+  order       Order   @relation(fields: [orderId], references: [id])
+  productName String  @map("product_name")
+  sku         String?
+  quantity    Decimal @db.Decimal(10, 2)
+  unit        String  @default("m2")
+  unitPrice   Decimal @map("unit_price") @db.Decimal(15, 2)
+  totalPrice  Decimal @map("total_price") @db.Decimal(15, 2)
+
+  @@map("order_items")
+}
+
+// ─── Shipments ─────────────────────────────────────────────
+
+model Shipment {
+  id              String         @id @default(cuid())
+  shipmentNo      String         @unique @map("shipment_no")
+  orderId         String         @map("order_id")
+  order           Order          @relation(fields: [orderId], references: [id])
+  status          ShipmentStatus @default(PREPARING)
+  origin          String         @default("TR")
+  destination     String
+  containerNo     String?        @map("container_no")
+  trackingNo      String?        @map("tracking_no")
+  estimatedArrival DateTime?     @map("estimated_arrival")
+  actualArrival   DateTime?      @map("actual_arrival")
+  isCancelled     Boolean        @default(false) @map("is_cancelled")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  @@map("shipments")
+}
+
+enum ShipmentStatus {
+  PREPARING
+  IN_TRANSIT_TR
+  AT_PORT
+  IN_TRANSIT_SEA
+  CUSTOMS
+  IN_TRANSIT_USA
+  FINAL_MILE
+  DELIVERED
+}
+
+// ─── Ledger (Source of Truth) ──────────────────────────────
+
+model LedgerEntry {
+  id          String      @id @default(cuid())
+  entryNo     String      @unique @map("entry_no")
+  accountId   String      @map("account_id")
+  account     Account     @relation(fields: [accountId], references: [id])
+  type        LedgerType
+  debit       Decimal     @default(0) @db.Decimal(15, 2)
+  credit      Decimal     @default(0) @db.Decimal(15, 2)
+  currency    String      @default("USD")
+  exchangeRate Decimal    @default(1) @map("exchange_rate") @db.Decimal(10, 4)
+  description String
+  referenceId String?     @map("reference_id")
+  referenceType String?   @map("reference_type")
+  isCancelled Boolean     @default(false) @map("is_cancelled")
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  @@index([accountId, createdAt])
+  @@map("ledger_entries")
+}
+
+enum LedgerType {
+  INVOICE
+  PAYMENT
+  COLLECTION
+  REVERSAL
+  ADJUSTMENT
+}
+
+// ─── Documents ─────────────────────────────────────────────
+
+model Document {
+  id          String       @id @default(cuid())
+  docNo       String       @unique @map("doc_no")
+  type        DocumentType
+  data        Json
+  isCancelled Boolean      @default(false) @map("is_cancelled")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  @@map("documents")
+}
+
+enum DocumentType {
+  PROFORMA
+  INVOICE
+  PACKING_LIST
+  CREDIT_NOTE
+}
