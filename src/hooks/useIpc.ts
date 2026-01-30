@@ -15,6 +15,7 @@ import {
   useDashboardKpis as useDemoKpis,
 } from './useAnalytics'
 import { DEMO_ORDERS } from './useDemoOrders'
+import { DEMO_PRODUCTS, DEMO_WAREHOUSES } from './useDemoProducts'
 
 // ── Accounts ───────────────────────────────────────────────
 
@@ -157,6 +158,77 @@ export function useRecordPayment() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['accounts'] })
+      qc.invalidateQueries({ queryKey: ['analytics'] })
+    },
+  })
+}
+
+// ── Products & Inventory ──────────────────────────────────
+
+export function useProductsQuery(filters?: { search?: string; material?: string }) {
+  return useQuery({
+    queryKey: ['products', filters],
+    queryFn: async () => {
+      if (hasIpc()) return getApi().products.list(filters)
+      let result: any[] = DEMO_PRODUCTS
+      if (filters?.search) {
+        const q = filters.search.toLowerCase()
+        result = result.filter(
+          (p) => p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q),
+        )
+      }
+      if (filters?.material) {
+        result = result.filter((p) => p.material === filters.material)
+      }
+      return result
+    },
+    staleTime: 30_000,
+  })
+}
+
+export function useProductQuery(id: string | null) {
+  return useQuery({
+    queryKey: ['product', id],
+    queryFn: async () => {
+      if (!id) return null
+      if (hasIpc()) return getApi().products.get(id)
+      return DEMO_PRODUCTS.find((p) => p.id === id) || null
+    },
+    enabled: !!id,
+  })
+}
+
+export function useCreateProduct() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: any) => {
+      if (hasIpc()) return getApi().products.create(data)
+      return { success: true, data: { id: crypto.randomUUID(), ...data } }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['products'] }),
+  })
+}
+
+export function useWarehousesQuery() {
+  return useQuery({
+    queryKey: ['warehouses'],
+    queryFn: async () => {
+      if (hasIpc()) return getApi().inventory.warehouses()
+      return DEMO_WAREHOUSES
+    },
+    staleTime: 300_000,
+  })
+}
+
+export function useCreateInvoice() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: { orderId: string }) => {
+      if (hasIpc()) return getApi().invoices.createFromOrder(data)
+      return { success: true, data: { id: crypto.randomUUID(), invoiceNo: `INV-DEMO-${Date.now().toString(36).toUpperCase()}` } }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['orders'] })
       qc.invalidateQueries({ queryKey: ['analytics'] })
     },
   })

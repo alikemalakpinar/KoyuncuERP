@@ -48,6 +48,30 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.invoke('ledger:reversal', originalEntryId, reason),
   },
 
+  // ── Products & Inventory ────────────────────────────────
+  products: {
+    list: (filters?: { search?: string; material?: string; collection?: string }) =>
+      ipcRenderer.invoke('products:list', filters),
+    get: (id: string) =>
+      ipcRenderer.invoke('products:get', id),
+    create: (data: any) =>
+      ipcRenderer.invoke('products:create', data),
+    update: (id: string, data: any) =>
+      ipcRenderer.invoke('products:update', id, data),
+  },
+
+  inventory: {
+    warehouses: () =>
+      ipcRenderer.invoke('inventory:warehouses'),
+    stockByVariant: (variantId: string) =>
+      ipcRenderer.invoke('inventory:stockByVariant', variantId),
+  },
+
+  invoices: {
+    createFromOrder: (data: { orderId: string }) =>
+      ipcRenderer.invoke('invoices:createFromOrder', data),
+  },
+
   // ── Analytics ────────────────────────────────────────────
   analytics: {
     dashboardKpis: () =>

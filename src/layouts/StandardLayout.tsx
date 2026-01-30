@@ -54,6 +54,7 @@ function buildBreadcrumbs(pathname: string): { label: string; href: string }[] {
     '/': 'Gösterge Paneli',
     '/accounts': 'Cariler',
     '/orders': 'Siparişler',
+    '/inventory': 'Ürün Kataloğu',
     '/shipments': 'Sevkiyat',
     '/commissions': 'Acente Hakedişleri',
     '/profit': 'Kâr Analizi',

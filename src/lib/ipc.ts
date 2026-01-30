@@ -30,6 +30,22 @@ export interface IpcApi {
     reversal: (originalEntryId: string, reason: string) => Promise<{ success: boolean; data?: any; error?: string }>
   }
 
+  products: {
+    list: (filters?: { search?: string; material?: string; collection?: string }) => Promise<any[]>
+    get: (id: string) => Promise<any>
+    create: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
+    update: (id: string, data: any) => Promise<{ success: boolean; data?: any; error?: string }>
+  }
+
+  inventory: {
+    warehouses: () => Promise<any[]>
+    stockByVariant: (variantId: string) => Promise<any[]>
+  }
+
+  invoices: {
+    createFromOrder: (data: { orderId: string }) => Promise<{ success: boolean; data?: any; error?: string }>
+  }
+
   analytics: {
     dashboardKpis: () => Promise<any>
     profitAnalysis: () => Promise<any[]>
