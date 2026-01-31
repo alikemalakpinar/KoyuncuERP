@@ -18,6 +18,53 @@ declare global {
 let _token: string | null = null
 let _activeBranchId: string | null = null
 
+export function hasIpc(): boolean {
+  return !!window.api
+}
+
+export function getApi() {
+  return {
+    accounts: {
+      list: (filters?: any) => ipcCall('accounts:list', filters),
+      get: (id: string) => ipcCall('accounts:get', { id }),
+      create: (data: any) => ipcCall('accounts:create', data),
+      update: (id: string, data: any) => ipcCall('accounts:update', { id, data }),
+    },
+    orders: {
+      list: (filters?: any) => ipcCall('orders:list', filters),
+      get: (id: string) => ipcCall('orders:get', { id }),
+      create: (data: any) => ipcCall('orders:create', data),
+      updateStatus: (id: string, status: string) => ipcCall('orders:updateStatus', { id, status }),
+      cancel: (id: string, reason: string) => ipcCall('orders:cancel', { id, reason }),
+    },
+    ledger: {
+      list: (filters?: any) => ipcCall('ledger:list', filters),
+      collection: (data: any) => ipcCall('ledger:collection', data),
+      payment: (data: any) => ipcCall('ledger:payment', data),
+      reversal: (originalEntryId: string, reason: string) => ipcCall('ledger:reversal', { originalEntryId, reason }),
+    },
+    products: {
+      list: (filters?: any) => ipcCall('products:list', filters),
+      get: (id: string) => ipcCall('products:get', { id }),
+      create: (data: any) => ipcCall('products:create', data),
+      update: (id: string, data: any) => ipcCall('products:update', { id, data }),
+    },
+    inventory: {
+      warehouses: () => ipcCall('inventory:warehouses'),
+      stockByVariant: (variantId: string) => ipcCall('inventory:stockByVariant', { variantId }),
+    },
+    invoices: {
+      createFromOrder: (data: any) => ipcCall('invoices:createFromOrder', data),
+    },
+    analytics: {
+      dashboardKpis: () => ipcCall('analytics:dashboardKpis'),
+      profitAnalysis: () => ipcCall('analytics:profitAnalysis'),
+      agencyPerformance: () => ipcCall('analytics:agencyPerformance'),
+      accountHealth: (accountId: string) => ipcCall('analytics:accountHealth', { accountId }),
+    },
+  }
+}
+
 export function setAuthToken(token: string | null) { _token = token }
 export function getAuthToken() { return _token }
 export function setActiveBranch(branchId: string | null) { _activeBranchId = branchId }
