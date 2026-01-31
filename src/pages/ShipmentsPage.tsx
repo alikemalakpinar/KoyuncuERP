@@ -131,12 +131,16 @@ export default function ShipmentsPage() {
     totalPackages: demoShipments.filter(s => s.status !== 'delivered').reduce((sum, s) => sum + s.packages, 0),
   }
 
+  const seaCount = demoShipments.filter(s => s.method === 'sea').length
+  const airCount = demoShipments.filter(s => s.method === 'air').length
+  const landCount = demoShipments.filter(s => s.method === 'land').length
+
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Sevkiyat & Lojistik</h1>
+          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Sevkiyat & Lojistik</h1>
           <p className="text-sm text-gray-500 mt-0.5">Konteyner, konşimento ve nakliye takibi</p>
         </div>
         <button className="flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700 transition-colors shadow-sm">
@@ -144,22 +148,53 @@ export default function ShipmentsPage() {
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
         {[
-          { label: 'Aktif Sevkiyat', value: stats.active, icon: Package, color: 'text-brand-600' },
-          { label: 'Yolda', value: stats.inTransit, icon: Ship, color: 'text-blue-600' },
-          { label: 'Gümrükte', value: stats.atCustoms, icon: AlertTriangle, color: 'text-amber-600' },
-          { label: 'Toplam Koli', value: stats.totalPackages, icon: Container, color: 'text-purple-600' },
-        ].map((s) => (
-          <div key={s.label} className="rounded-2xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-gray-500">{s.label}</p>
-              <s.icon className={`h-4 w-4 ${s.color}`} />
+          { label: 'Aktif Sevkiyat', value: stats.active, icon: Package, color: 'text-brand-600 bg-brand-50 dark:bg-brand-900/20' },
+          { label: 'Yolda', value: stats.inTransit, icon: Ship, color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' },
+          { label: 'Gümrükte', value: stats.atCustoms, icon: AlertTriangle, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20' },
+          { label: 'Toplam Koli', value: stats.totalPackages, icon: Container, color: 'text-purple-600 bg-purple-50 dark:bg-purple-900/20' },
+          { label: 'Deniz Yolu', value: seaCount, icon: Ship, color: 'text-cyan-600 bg-cyan-50 dark:bg-cyan-900/20' },
+          { label: 'Hava Yolu', value: airCount, icon: Plane, color: 'text-sky-600 bg-sky-50 dark:bg-sky-900/20' },
+          { label: 'Kara Yolu', value: landCount, icon: Truck, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20' },
+        ].map((kpi) => (
+          <div key={kpi.label} className="rounded-xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark p-3">
+            <div className="flex items-center gap-2">
+              <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${kpi.color}`}>
+                <kpi.icon className="h-3.5 w-3.5" />
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">{kpi.label}</p>
+                <p className="text-base font-bold text-gray-900 dark:text-white tabular-nums">{kpi.value}</p>
+              </div>
             </div>
-            <p className={`text-2xl font-bold mt-1 ${s.color}`}>{s.value}</p>
           </div>
         ))}
+      </div>
+
+      {/* Active Routes Summary */}
+      <div className="rounded-xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark p-4">
+        <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wider mb-3">Aktif Rotalar</p>
+        <div className="flex flex-wrap gap-3">
+          {demoShipments.filter(s => s.status !== 'delivered').map(s => {
+            const MethodIcon = methodIcons[s.method]
+            return (
+              <div key={s.id} className="flex items-center gap-2 rounded-lg bg-surface-secondary dark:bg-surface-dark-secondary px-3 py-2">
+                <MethodIcon className="h-3.5 w-3.5 text-gray-400" />
+                <span className="text-[11px] font-medium text-gray-900 dark:text-white">Türkiye</span>
+                <span className="text-gray-300">→</span>
+                <MapPin className="h-3 w-3 text-brand-500" />
+                <span className="text-[11px] font-medium text-gray-900 dark:text-white">{s.destination.split(',')[0]}</span>
+                <span className={`text-[10px] font-semibold ${
+                  s.status === 'in_transit' ? 'text-blue-500' : s.status === 'customs_tr' || s.status === 'customs_dest' ? 'text-amber-500' : 'text-gray-400'
+                }`}>
+                  {statusConfig[s.status].label}
+                </span>
+              </div>
+            )
+          })}
+        </div>
       </div>
 
       {/* Filters */}

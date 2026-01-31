@@ -56,17 +56,26 @@ export default function QuotationsPage() {
 
   const stats = {
     total: demoQuotations.length,
+    draft: demoQuotations.filter(q => q.status === 'draft').length,
     sent: demoQuotations.filter(q => q.status === 'sent').length,
     accepted: demoQuotations.filter(q => q.status === 'accepted').length,
-    totalValue: demoQuotations.filter(q => q.status === 'sent' || q.status === 'accepted').reduce((s, q) => s + q.totalAmount, 0),
+    converted: demoQuotations.filter(q => q.status === 'converted').length,
+    rejected: demoQuotations.filter(q => q.status === 'rejected').length,
+    totalValue: demoQuotations.reduce((s, q) => s + q.totalAmount, 0),
+    openValue: demoQuotations.filter(q => q.status === 'sent' || q.status === 'accepted').reduce((s, q) => s + q.totalAmount, 0),
+    conversionRate: (() => {
+      const decided = demoQuotations.filter(q => ['accepted', 'rejected', 'converted'].includes(q.status)).length
+      const won = demoQuotations.filter(q => ['accepted', 'converted'].includes(q.status)).length
+      return decided > 0 ? Math.round((won / decided) * 100) : 0
+    })(),
   }
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Proforma & Teklifler</h1>
+          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Proforma & Teklifler</h1>
           <p className="text-sm text-gray-500 mt-0.5">Müşterilere gönderilen teklif ve proformaları yönetin</p>
         </div>
         <button className="flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-700 transition-colors shadow-sm">
@@ -74,19 +83,54 @@ export default function QuotationsPage() {
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-4">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
-          { label: 'Toplam Teklif', value: stats.total, color: 'text-gray-900 dark:text-white' },
-          { label: 'Gönderilen', value: stats.sent, color: 'text-blue-600' },
-          { label: 'Kabul Edilen', value: stats.accepted, color: 'text-green-600' },
-          { label: 'Açık Teklif Tutarı', value: `$${(stats.totalValue / 1000).toFixed(0)}K`, color: 'text-brand-600' },
-        ].map((s) => (
-          <div key={s.label} className="rounded-2xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark p-4">
-            <p className="text-xs text-gray-500">{s.label}</p>
-            <p className={`text-2xl font-bold mt-1 ${s.color}`}>{s.value}</p>
+          { label: 'Toplam Teklif', value: stats.total, icon: FileText, color: 'text-brand-600 bg-brand-50 dark:bg-brand-900/20' },
+          { label: 'Gönderilen', value: stats.sent, icon: Send, color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' },
+          { label: 'Kabul Edilen', value: stats.accepted, icon: CheckCircle, color: 'text-green-600 bg-green-50 dark:bg-green-900/20' },
+          { label: 'Siparişe Dönen', value: stats.converted, icon: ArrowRight, color: 'text-purple-600 bg-purple-50 dark:bg-purple-900/20' },
+          { label: 'Açık Tutar', value: `$${(stats.openValue / 1000).toFixed(0)}K`, icon: DollarSign, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20' },
+          { label: 'Dönüşüm Oranı', value: `%${stats.conversionRate}`, icon: CheckCircle, color: stats.conversionRate >= 50 ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20' : 'text-red-600 bg-red-50 dark:bg-red-900/20' },
+        ].map((kpi) => (
+          <div key={kpi.label} className="rounded-xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark p-3">
+            <div className="flex items-center gap-2">
+              <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${kpi.color}`}>
+                <kpi.icon className="h-3.5 w-3.5" />
+              </div>
+              <div>
+                <p className="text-[10px] text-gray-500 dark:text-gray-400">{kpi.label}</p>
+                <p className="text-base font-bold text-gray-900 dark:text-white tabular-nums">{kpi.value}</p>
+              </div>
+            </div>
           </div>
         ))}
+      </div>
+
+      {/* Conversion Funnel */}
+      <div className="rounded-xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark p-4">
+        <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wider mb-3">Teklif Dönüşüm Hunisi</p>
+        <div className="flex items-center gap-2">
+          {[
+            { label: 'Taslak', count: stats.draft, color: 'bg-gray-400' },
+            { label: 'Gönderildi', count: stats.sent, color: 'bg-blue-500' },
+            { label: 'Kabul', count: stats.accepted, color: 'bg-green-500' },
+            { label: 'Sipariş', count: stats.converted, color: 'bg-brand-600' },
+          ].map((step, i) => (
+            <div key={step.label} className="flex items-center flex-1">
+              <div className="flex-1">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] text-gray-500">{step.label}</span>
+                  <span className="text-[12px] font-bold text-gray-900 dark:text-white">{step.count}</span>
+                </div>
+                <div className="h-2 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+                  <div className={`h-full rounded-full ${step.color}`} style={{ width: `${stats.total > 0 ? (step.count / stats.total) * 100 : 0}%` }} />
+                </div>
+              </div>
+              {i < 3 && <ChevronRight className="h-4 w-4 text-gray-300 mx-1 shrink-0" />}
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Filters */}
