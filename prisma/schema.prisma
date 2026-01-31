@@ -7,7 +7,167 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── Products (Ürün Kataloğu) ─────────────────────────────
+// ─── Identity & Access ─────────────────────────────────────
+
+enum UserRole {
+  OWNER
+  ADMIN
+  MANAGER
+  SALES
+  ACCOUNTANT
+  VIEWER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  fullName     String   @map("full_name")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  branches         UserBranch[]
+  sessions         Session[]
+  cashTransactions CashTransaction[]
+  auditLogs        AuditLog[]
+
+  @@map("users")
+}
+
+model Branch {
+  id          String  @id @default(cuid())
+  name        String
+  code        String  @unique
+  address     String?
+  warehouseId String? @unique @map("warehouse_id")
+  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id])
+  isActive    Boolean @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users             UserBranch[]
+  orders            Order[]
+  invoices          Invoice[]
+  accounts          Account[]
+  ledgerEntries     LedgerEntry[]
+  stockMovements    StockMovement[]
+  cashRegisters     CashRegister[]
+  cashTransactions  CashTransaction[]
+  payments          Payment[]
+  auditLogs         AuditLog[]
+  inventoryLots     InventoryLot[]
+  inventoryTransactions InventoryTransaction[]
+  periodLocks       PeriodLock[]
+  commissionRecords CommissionRecord[]
+  documents         Document[]
+  shipments         Shipment[]
+  landedCosts       LandedCost[]
+
+  @@map("branches")
+}
+
+model UserBranch {
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  branchId  String   @map("branch_id")
+  branch    Branch   @relation(fields: [branchId], references: [id])
+  role      UserRole
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@id([userId, branchId])
+  @@map("user_branches")
+}
+
+model Session {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  user      User      @relation(fields: [userId], references: [id])
+  tokenHash String    @unique @map("token_hash")
+  createdAt DateTime  @default(now()) @map("created_at")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("sessions")
+}
+
+// ─── Cash Register & Transactions ──────────────────────────
+
+enum CashTransactionType {
+  IN
+  OUT
+}
+
+model CashRegister {
+  id             String   @id @default(cuid())
+  branchId       String   @map("branch_id")
+  branch         Branch   @relation(fields: [branchId], references: [id])
+  name           String
+  isActive       Boolean  @default(true) @map("is_active")
+  openingBalance Decimal  @default(0) @map("opening_balance") @db.Decimal(15, 2)
+  currentBalance Decimal  @default(0) @map("current_balance") @db.Decimal(15, 2)
+  isOpen         Boolean  @default(false) @map("is_open")
+  lastOpenedAt   DateTime? @map("last_opened_at")
+  lastClosedAt   DateTime? @map("last_closed_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  transactions CashTransaction[]
+
+  @@index([branchId])
+  @@map("cash_registers")
+}
+
+model CashTransaction {
+  id             String              @id @default(cuid())
+  cashRegisterId String              @map("cash_register_id")
+  cashRegister   CashRegister        @relation(fields: [cashRegisterId], references: [id])
+  branchId       String              @map("branch_id")
+  branch         Branch              @relation(fields: [branchId], references: [id])
+  type           CashTransactionType
+  amount         Decimal             @db.Decimal(15, 2)
+  reason         String
+  refType        String?             @map("ref_type")
+  refId          String?             @map("ref_id")
+  createdByUserId String             @map("created_by_user_id")
+  createdByUser  User                @relation(fields: [createdByUserId], references: [id])
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  @@index([branchId, createdAt])
+  @@index([cashRegisterId])
+  @@map("cash_transactions")
+}
+
+// ─── Payments (Split Payments) ─────────────────────────────
+
+enum PaymentMethod {
+  CASH
+  CARD
+  TRANSFER
+  INSTALLMENT
+}
+
+model Payment {
+  id       String        @id @default(cuid())
+  orderId  String        @map("order_id")
+  order    Order         @relation(fields: [orderId], references: [id])
+  branchId String        @map("branch_id")
+  branch   Branch        @relation(fields: [branchId], references: [id])
+  method   PaymentMethod
+  amount   Decimal       @db.Decimal(15, 2)
+  currency String        @default("USD")
+  paidAt   DateTime      @default(now()) @map("paid_at")
+  note     String?
+
+  @@index([branchId, paidAt])
+  @@index([orderId])
+  @@map("payments")
+}
+
+// ─── Products (Urun Katalogu) ──────────────────────────────
 
 model Product {
   id          String           @id @default(cuid())
@@ -68,7 +228,7 @@ model ProductVariant {
   @@map("product_variants")
 }
 
-// ─── Warehouse & Stock ────────────────────────────────────
+// ─── Warehouse & Stock ─────────────────────────────────────
 
 model Warehouse {
   id        String  @id @default(cuid())
@@ -84,6 +244,7 @@ model Warehouse {
   stockMovements        StockMovement[]
   inventoryLots         InventoryLot[]
   inventoryTransactions InventoryTransaction[]
+  branch                Branch?
 
   @@map("warehouses")
 }
@@ -110,6 +271,8 @@ model StockMovement {
   warehouse     Warehouse         @relation(fields: [warehouseId], references: [id])
   productId     String            @map("product_id")
   product       Product           @relation(fields: [productId], references: [id])
+  branchId      String            @map("branch_id")
+  branch        Branch            @relation(fields: [branchId], references: [id])
   type          StockMovementType
   quantity      Int
   referenceId   String?           @map("reference_id")
@@ -119,6 +282,7 @@ model StockMovement {
 
   @@index([variantId, warehouseId])
   @@index([referenceId, referenceType])
+  @@index([branchId, createdAt])
   @@map("stock_movements")
 }
 
@@ -131,13 +295,15 @@ enum StockMovementType {
   ADJUSTMENT
 }
 
-// ─── Invoice (Fatura) ─────────────────────────────────────
+// ─── Invoice (Fatura) ──────────────────────────────────────
 
 model Invoice {
   id          String        @id @default(cuid())
   invoiceNo   String        @unique @map("invoice_no")
   orderId     String        @map("order_id")
   order       Order         @relation(fields: [orderId], references: [id])
+  branchId    String        @map("branch_id")
+  branch      Branch        @relation(fields: [branchId], references: [id])
   date        DateTime      @db.Date
   dueDate     DateTime?     @map("due_date") @db.Date
   subtotal    Decimal       @db.Decimal(15, 2)
@@ -153,6 +319,7 @@ model Invoice {
   ledgerEntries LedgerEntry[]
 
   @@index([orderId])
+  @@index([branchId, createdAt])
   @@map("invoices")
 }
 
@@ -163,13 +330,15 @@ enum InvoiceStatus {
   CANCELLED
 }
 
-// ─── Accounts (Cari) ──────────────────────────────────────
+// ─── Accounts (Cari) ───────────────────────────────────────
 
 model Account {
   id              String      @id @default(cuid())
-  code            String      @unique
+  code            String
   name            String
   type            AccountType
+  branchId        String      @map("branch_id")
+  branch          Branch      @relation(fields: [branchId], references: [id])
   taxId           String?     @map("tax_id")
   phone           String?
   email           String?
@@ -184,7 +353,7 @@ model Account {
   createdAt       DateTime    @default(now()) @map("created_at")
   updatedAt       DateTime    @updatedAt @map("updated_at")
 
-  // Acente hiyerarşisi
+  // Acente hiyerarsisi
   parentAccountId String?     @map("parent_account_id")
   parentAccount   Account?    @relation("AccountHierarchy", fields: [parentAccountId], references: [id])
   childAccounts   Account[]   @relation("AccountHierarchy")
@@ -197,6 +366,8 @@ model Account {
   ledgerEntries   LedgerEntry[]
   agency          Agency?
 
+  @@unique([branchId, code])
+  @@index([branchId])
   @@map("accounts")
 }
 
@@ -207,7 +378,7 @@ enum AccountType {
   AGENCY
 }
 
-// ─── Agency (Acente) ──────────────────────────────────────
+// ─── Agency (Acente) ───────────────────────────────────────
 
 model Agency {
   id                String   @id @default(cuid())
@@ -260,13 +431,15 @@ model CommissionConfig {
   @@map("commission_configs")
 }
 
-// ─── Orders ────────────────────────────────────────────────
+// ─── Orders ─────────────────────────────────────────────────
 
 model Order {
   id                   String      @id @default(cuid())
-  orderNo              String      @unique @map("order_no")
+  orderNo              String      @map("order_no")
   accountId            String      @map("account_id")
   account              Account     @relation(fields: [accountId], references: [id])
+  branchId             String      @map("branch_id")
+  branch               Branch      @relation(fields: [branchId], references: [id])
   status               OrderStatus @default(DRAFT)
   currency             String      @default("USD")
   totalAmount          Decimal     @default(0) @map("total_amount") @db.Decimal(15, 2)
@@ -274,7 +447,7 @@ model Order {
   vatAmount            Decimal     @default(0) @map("vat_amount") @db.Decimal(15, 2)
   grandTotal           Decimal     @default(0) @map("grand_total") @db.Decimal(15, 2)
 
-  // Acente komisyon alanları
+  // Acente komisyon alanlari
   agencyStaffId        String?     @map("agency_staff_id")
   agencyStaff          AgencyStaff? @relation(fields: [agencyStaffId], references: [id])
   agencyCommissionRate Decimal     @default(0) @map("agency_commission_rate") @db.Decimal(5, 2)
@@ -293,7 +466,10 @@ model Order {
   landedCosts       LandedCost[]
   commissionRecords CommissionRecord[]
   invoices          Invoice[]
+  payments          Payment[]
 
+  @@unique([branchId, orderNo])
+  @@index([branchId, createdAt])
   @@map("orders")
 }
 
@@ -326,12 +502,14 @@ model OrderItem {
   @@map("order_items")
 }
 
-// ─── Landed Cost (Toplam Maliyet Analizi) ─────────────────
+// ─── Landed Cost (Toplam Maliyet Analizi) ──────────────────
 
 model LandedCost {
   id           String         @id @default(cuid())
   orderId      String         @map("order_id")
   order        Order          @relation(fields: [orderId], references: [id])
+  branchId     String         @map("branch_id")
+  branch       Branch         @relation(fields: [branchId], references: [id])
   costType     LandedCostType
   amount       Decimal        @db.Decimal(15, 2)
   currency     String         @default("USD")
@@ -341,6 +519,7 @@ model LandedCost {
   createdAt    DateTime       @default(now()) @map("created_at")
 
   @@index([orderId])
+  @@index([branchId])
   @@map("landed_costs")
 }
 
@@ -354,7 +533,7 @@ enum LandedCostType {
   OTHER
 }
 
-// ─── Commission Records (Hakediş Kayıtları) ──────────────
+// ─── Commission Records (Hakedis Kayitlari) ────────────────
 
 model CommissionRecord {
   id               String           @id @default(cuid())
@@ -362,6 +541,8 @@ model CommissionRecord {
   order            Order            @relation(fields: [orderId], references: [id])
   agencyId         String           @map("agency_id")
   agency           Agency           @relation(fields: [agencyId], references: [id])
+  branchId         String           @map("branch_id")
+  branch           Branch           @relation(fields: [branchId], references: [id])
   agencyStaffId    String?          @map("agency_staff_id")
   agencyStaff      AgencyStaff?     @relation(fields: [agencyStaffId], references: [id])
   commissionRate   Decimal          @map("commission_rate") @db.Decimal(5, 2)
@@ -373,6 +554,7 @@ model CommissionRecord {
   createdAt        DateTime         @default(now()) @map("created_at")
 
   @@index([agencyId, status])
+  @@index([branchId])
   @@map("commission_records")
 }
 
@@ -383,13 +565,15 @@ enum CommissionStatus {
   CANCELLED
 }
 
-// ─── Shipments ─────────────────────────────────────────────
+// ─── Shipments ──────────────────────────────────────────────
 
 model Shipment {
   id               String         @id @default(cuid())
   shipmentNo       String         @unique @map("shipment_no")
   orderId          String         @map("order_id")
   order            Order          @relation(fields: [orderId], references: [id])
+  branchId         String         @map("branch_id")
+  branch           Branch         @relation(fields: [branchId], references: [id])
   status           ShipmentStatus @default(PREPARING)
   origin           String         @default("TR")
   destination      String
@@ -404,6 +588,7 @@ model Shipment {
   createdAt        DateTime       @default(now()) @map("created_at")
   updatedAt        DateTime       @updatedAt @map("updated_at")
 
+  @@index([branchId])
   @@map("shipments")
 }
 
@@ -418,13 +603,15 @@ enum ShipmentStatus {
   DELIVERED
 }
 
-// ─── Ledger (Source of Truth) ──────────────────────────────
+// ─── Ledger (Source of Truth) ───────────────────────────────
 
 model LedgerEntry {
   id            String     @id @default(cuid())
   entryNo       String     @unique @map("entry_no")
   accountId     String     @map("account_id")
   account       Account    @relation(fields: [accountId], references: [id])
+  branchId      String     @map("branch_id")
+  branch        Branch     @relation(fields: [branchId], references: [id])
   type          LedgerType
   debit         Decimal    @default(0) @db.Decimal(15, 2)
   credit        Decimal    @default(0) @db.Decimal(15, 2)
@@ -440,6 +627,7 @@ model LedgerEntry {
   createdAt     DateTime   @default(now()) @map("created_at")
 
   @@index([accountId, createdAt])
+  @@index([branchId, createdAt])
   @@index([costCenter])
   @@index([referenceId, referenceType])
   @@map("ledger_entries")
@@ -455,17 +643,20 @@ enum LedgerType {
   FX_GAIN_LOSS
 }
 
-// ─── Documents ─────────────────────────────────────────────
+// ─── Documents ──────────────────────────────────────────────
 
 model Document {
   id          String       @id @default(cuid())
   docNo       String       @unique @map("doc_no")
   type        DocumentType
+  branchId    String       @map("branch_id")
+  branch      Branch       @relation(fields: [branchId], references: [id])
   data        Json
   isCancelled Boolean      @default(false) @map("is_cancelled")
   createdAt   DateTime     @default(now()) @map("created_at")
   updatedAt   DateTime     @updatedAt @map("updated_at")
 
+  @@index([branchId])
   @@map("documents")
 }
 
@@ -476,7 +667,7 @@ enum DocumentType {
   CREDIT_NOTE
 }
 
-// ─── Inventory Lots (FIFO Stok Takibi) ──────────────────────
+// ─── Inventory Lots (FIFO Stok Takibi) ─────────────────────
 
 model InventoryLot {
   id                String   @id @default(cuid())
@@ -486,6 +677,8 @@ model InventoryLot {
   variant           ProductVariant @relation(fields: [variantId], references: [id])
   warehouseId       String   @map("warehouse_id")
   warehouse         Warehouse @relation(fields: [warehouseId], references: [id])
+  branchId          String   @map("branch_id")
+  branch            Branch   @relation(fields: [branchId], references: [id])
   batchNo           String   @unique @map("batch_no")
   quantity          Decimal  @db.Decimal(10, 2)
   remainingQuantity Decimal  @map("remaining_quantity") @db.Decimal(10, 2)
@@ -496,6 +689,7 @@ model InventoryLot {
   transactions InventoryTransaction[]
 
   @@index([variantId, warehouseId])
+  @@index([branchId])
   @@index([receivedDate])
   @@map("inventory_lots")
 }
@@ -507,6 +701,8 @@ model InventoryTransaction {
   variant       ProductVariant           @relation(fields: [variantId], references: [id])
   warehouseId   String                   @map("warehouse_id")
   warehouse     Warehouse                @relation(fields: [warehouseId], references: [id])
+  branchId      String                   @map("branch_id")
+  branch        Branch                   @relation(fields: [branchId], references: [id])
   lotId         String?                  @map("lot_id")
   lot           InventoryLot?            @relation(fields: [lotId], references: [id])
   quantity      Decimal                  @db.Decimal(10, 2)
@@ -518,6 +714,7 @@ model InventoryTransaction {
   createdAt     DateTime                 @default(now()) @map("created_at")
 
   @@index([variantId, createdAt])
+  @@index([branchId, createdAt])
   @@index([referenceId, referenceType])
   @@map("inventory_transactions")
 }
@@ -562,37 +759,44 @@ model PriceListItem {
   @@map("price_list_items")
 }
 
-// ─── Period Lock (Dönem Kilitleme) ──────────────────────────
+// ─── Period Lock (Donem Kilitleme) ──────────────────────────
 
 model PeriodLock {
   id          String   @id @default(cuid())
   closingDate DateTime @map("closing_date") @db.Date
   lockedBy    String   @map("locked_by")
+  branchId    String   @map("branch_id")
+  branch      Branch   @relation(fields: [branchId], references: [id])
   notes       String?
   createdAt   DateTime @default(now()) @map("created_at")
 
+  @@index([branchId])
   @@map("period_locks")
 }
 
-// ─── Audit Log (Denetim İzi) ──────────────────────────────
+// ─── Audit Log (Denetim Izi) ───────────────────────────────
 
 model AuditLog {
-  id           String   @id @default(cuid())
-  entityType   String   @map("entity_type")
-  entityId     String   @map("entity_id")
-  action       String   // CREATE, UPDATE, STATUS_CHANGE, CANCEL, REVERSAL
-  previousData Json?    @map("previous_data")
-  newData      Json?    @map("new_data")
-  userId       String   @default("system") @map("user_id")
-  description  String
-  createdAt    DateTime @default(now()) @map("created_at")
+  id              String   @id @default(cuid())
+  entityType      String   @map("entity_type")
+  entityId        String   @map("entity_id")
+  action          String   // CREATE, UPDATE, STATUS_CHANGE, CANCEL, REVERSAL
+  previousData    Json?    @map("previous_data")
+  newData         Json?    @map("new_data")
+  userId          String   @map("user_id")
+  user            User     @relation(fields: [userId], references: [id])
+  branchId        String   @map("branch_id")
+  branch          Branch   @relation(fields: [branchId], references: [id])
+  description     String
+  createdAt       DateTime @default(now()) @map("created_at")
 
   @@index([entityType, entityId])
+  @@index([branchId, createdAt])
   @@index([createdAt])
   @@map("audit_logs")
 }
 
-// ─── Exchange Rates (Kur Tablosu) ─────────────────────────
+// ─── Exchange Rates (Kur Tablosu) ──────────────────────────
 
 model ExchangeRate {
   id           String   @id @default(cuid())

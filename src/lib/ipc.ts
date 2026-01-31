@@ -1,78 +1,122 @@
 /**
- * IPC Client Types & Access
+ * IPC Bridge – Renderer Side
  *
- * Type-safe window.api access for the renderer process.
- * Falls back to demo data when running outside Electron (npm run dev).
+ * Type-safe wrapper around window.api.invoke.
+ * Token and branchId are injected automatically from session store.
  */
-
-export interface IpcApi {
-  platform: string
-
-  accounts: {
-    list: (filters?: { type?: string; isActive?: boolean; search?: string }) => Promise<any[]>
-    get: (id: string) => Promise<any>
-    create: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
-    update: (id: string, data: any) => Promise<{ success: boolean; data?: any; error?: string }>
-  }
-
-  orders: {
-    list: (filters?: { status?: string; accountId?: string; isCancelled?: boolean }) => Promise<any[]>
-    get: (id: string) => Promise<any>
-    create: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
-    updateStatus: (id: string, status: string) => Promise<{ success: boolean; data?: any; error?: string }>
-    cancel: (id: string, reason: string) => Promise<{ success: boolean; error?: string }>
-  }
-
-  ledger: {
-    list: (filters?: { accountId?: string; type?: string; costCenter?: string; limit?: number }) => Promise<any[]>
-    collection: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
-    payment: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
-    reversal: (originalEntryId: string, reason: string) => Promise<{ success: boolean; data?: any; error?: string }>
-  }
-
-  products: {
-    list: (filters?: { search?: string; material?: string; collection?: string }) => Promise<any[]>
-    get: (id: string) => Promise<any>
-    create: (data: any) => Promise<{ success: boolean; data?: any; error?: string }>
-    update: (id: string, data: any) => Promise<{ success: boolean; data?: any; error?: string }>
-  }
-
-  inventory: {
-    warehouses: () => Promise<any[]>
-    stockByVariant: (variantId: string) => Promise<any[]>
-  }
-
-  invoices: {
-    createFromOrder: (data: { orderId: string }) => Promise<{ success: boolean; data?: any; error?: string }>
-  }
-
-  analytics: {
-    dashboardKpis: () => Promise<any>
-    profitAnalysis: () => Promise<any[]>
-    agencyPerformance: () => Promise<any[]>
-    accountHealth: (accountId: string) => Promise<any>
-  }
-}
 
 declare global {
   interface Window {
-    api?: IpcApi
+    api?: {
+      invoke: (channel: string, ...args: any[]) => Promise<any>
+    }
   }
 }
 
-/**
- * Returns true if running inside Electron with IPC bridge.
- */
-export function hasIpc(): boolean {
-  return typeof window !== 'undefined' && !!window.api?.accounts
+// ── Session store (in-memory only) ─────────────────────────
+
+let _token: string | null = null
+let _activeBranchId: string | null = null
+
+export function setAuthToken(token: string | null) { _token = token }
+export function getAuthToken() { return _token }
+export function setActiveBranch(branchId: string | null) { _activeBranchId = branchId }
+export function getActiveBranch() { return _activeBranchId }
+
+// ── Generic IPC call (auto-injects token + branchId) ───────
+
+export async function ipcCall<T = any>(channel: string, data?: any): Promise<T> {
+  const isAuthChannel = channel.startsWith('auth:')
+
+  const payload = isAuthChannel
+    ? data
+    : { token: _token, branchId: _activeBranchId, ...(data ?? {}) }
+
+  if (window.api) {
+    return window.api.invoke(channel, payload)
+  }
+
+  console.warn(`[IPC] No Electron API for channel: ${channel}`)
+  return Promise.reject(new Error('Electron API not available'))
 }
 
-/**
- * Get the IPC API. Throws if not available.
- */
-export function getApi(): IpcApi {
-  if (!window.api) {
-    throw new Error('IPC API not available. Running outside Electron?')
-  }
-  return window.api
+// ── Typed helpers ──────────────────────────────────────────
+
+export const api = {
+  // Auth
+  login: (email: string, password: string) =>
+    ipcCall('auth:login', { email, password }),
+  logout: (token: string) =>
+    ipcCall('auth:logout', { token }),
+  me: (token: string) =>
+    ipcCall('auth:me', { token }),
+
+  // Accounts
+  accountsList: (filters?: any) => ipcCall('accounts:list', filters),
+  accountsGet: (id: string) => ipcCall('accounts:get', { id }),
+  accountsCreate: (data: any) => ipcCall('accounts:create', data),
+  accountsUpdate: (id: string, data: any) => ipcCall('accounts:update', { id, data }),
+
+  // Orders
+  ordersList: (filters?: any) => ipcCall('orders:list', filters),
+  ordersGet: (id: string) => ipcCall('orders:get', { id }),
+  ordersCreate: (data: any) => ipcCall('orders:create', data),
+  ordersUpdateStatus: (id: string, status: string) => ipcCall('orders:updateStatus', { id, status }),
+  ordersCancel: (id: string, reason: string) => ipcCall('orders:cancel', { id, reason }),
+
+  // Ledger
+  ledgerList: (filters?: any) => ipcCall('ledger:list', filters),
+  ledgerCollection: (data: any) => ipcCall('ledger:collection', data),
+  ledgerPayment: (data: any) => ipcCall('ledger:payment', data),
+  ledgerReversal: (originalEntryId: string, reason: string) => ipcCall('ledger:reversal', { originalEntryId, reason }),
+
+  // Products
+  productsList: (filters?: any) => ipcCall('products:list', filters),
+  productsGet: (id: string) => ipcCall('products:get', { id }),
+  productsCreate: (data: any) => ipcCall('products:create', data),
+  productsUpdate: (id: string, data: any) => ipcCall('products:update', { id, data }),
+
+  // Inventory
+  warehouses: () => ipcCall('inventory:warehouses'),
+  stockByVariant: (variantId: string) => ipcCall('inventory:stockByVariant', { variantId }),
+  invoiceCreateFromOrder: (orderId: string) => ipcCall('invoices:createFromOrder', { orderId }),
+
+  // Platinum - Inventory
+  receiveLot: (data: any) => ipcCall('inventory:receiveLot', data),
+  allocate: (data: any) => ipcCall('inventory:allocate', data),
+  fulfill: (data: any) => ipcCall('inventory:fulfill', data),
+  lots: (variantId: string, warehouseId?: string) => ipcCall('inventory:lots', { variantId, warehouseId }),
+  transactions: (variantId: string, limit?: number) => ipcCall('inventory:transactions', { variantId, limit }),
+
+  // Platinum - Pricing
+  priceResolve: (data: any) => ipcCall('pricing:resolve', data),
+  priceResolveBatch: (data: any) => ipcCall('pricing:resolveBatch', data),
+  priceLists: () => ipcCall('pricing:lists'),
+  priceCreateList: (data: any) => ipcCall('pricing:createList', data),
+  priceAddItem: (data: any) => ipcCall('pricing:addItem', data),
+  priceAssignToAccount: (accountId: string, priceListId: string) => ipcCall('pricing:assignToAccount', { accountId, priceListId }),
+
+  // Platinum - Finance
+  lockPeriod: (data: any) => ipcCall('finance:lockPeriod', data),
+  getLatestLock: () => ipcCall('finance:getLatestLock'),
+  isDateLocked: (date: string) => ipcCall('finance:isDateLocked', { date }),
+  agingReport: () => ipcCall('finance:agingReport'),
+  fxRevaluation: (currentRates: Record<string, number>) => ipcCall('finance:fxRevaluation', { currentRates }),
+  postFxRevaluation: (items: any[]) => ipcCall('finance:postFxRevaluation', { items }),
+
+  // Analytics
+  dashboardKpis: () => ipcCall('analytics:dashboardKpis'),
+  profitAnalysis: () => ipcCall('analytics:profitAnalysis'),
+  agencyPerformance: () => ipcCall('analytics:agencyPerformance'),
+  accountHealth: (accountId: string) => ipcCall('analytics:accountHealth', { accountId }),
+
+  // Cash Register
+  cashRegisters: () => ipcCall('cash:registers'),
+  cashOpen: (registerId: string, openingBalance: string) => ipcCall('cash:open', { registerId, openingBalance }),
+  cashClose: (registerId: string, actualCash: string) => ipcCall('cash:close', { registerId, actualCash }),
+  cashTransact: (data: any) => ipcCall('cash:transact', data),
+  cashTransactions: (registerId: string, date?: string) => ipcCall('cash:transactions', { registerId, date }),
+
+  // Payments
+  paymentCreate: (data: any) => ipcCall('payments:create', data),
 }

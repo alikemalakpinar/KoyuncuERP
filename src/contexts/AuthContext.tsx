@@ -1,192 +1,170 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
+/**
+ * Auth Context – DB-backed authentication with branch selection
+ *
+ * - No more demo users or mock auth
+ * - Token stored in memory (not localStorage for security)
+ * - Branch selection required after login if >1 branch
+ * - Permissions derived from role per branch
+ */
 
-export type UserRole = 'patron' | 'mudur' | 'muhasebeci' | 'satis_elemani' | 'acente'
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react'
+import { api, setAuthToken, setActiveBranch, getAuthToken } from '../lib/ipc'
 
-export interface User {
+// ── Types ──────────────────────────────────────────────────
+
+export type UserRole = 'OWNER' | 'ADMIN' | 'MANAGER' | 'SALES' | 'ACCOUNTANT' | 'VIEWER'
+
+export interface AuthUser {
   id: string
-  name: string
   email: string
-  role: UserRole
-  avatar?: string
-  agencyId?: string
-  agencyName?: string
+  fullName: string
 }
 
-interface AuthContextType {
-  user: User | null
-  isAuthenticated: boolean
-  login: (email: string, password: string) => Promise<boolean>
-  logout: () => void
-  hasPermission: (permission: Permission) => boolean
-  canViewCost: boolean
-  canViewProfit: boolean
-  canViewAllAgencies: boolean
-  canManageUsers: boolean
-  canCreateInvoice: boolean
-  canApproveCommission: boolean
-  canViewReports: boolean
-  canEditStock: boolean
+export interface AuthBranch {
+  branchId: string
+  branchName: string
+  branchCode: string
+  role: UserRole
 }
 
 export type Permission =
-  | 'view_cost_price'
-  | 'view_profit'
-  | 'view_all_agencies'
-  | 'manage_users'
-  | 'create_invoice'
-  | 'approve_commission'
-  | 'view_reports'
-  | 'edit_stock'
-  | 'view_accounting'
-  | 'view_dashboard_full'
-  | 'view_salary_info'
-  | 'export_data'
-  | 'delete_records'
-  | 'manage_settings'
+  | 'view_dashboard_full' | 'view_cost_price' | 'view_profit' | 'view_reports'
+  | 'view_accounting' | 'view_all_agencies' | 'view_salary_info'
+  | 'create_invoice' | 'manage_users' | 'approve_commission' | 'edit_stock'
+  | 'export_data' | 'delete_records' | 'manage_settings'
 
-const rolePermissions: Record<UserRole, Permission[]> = {
-  patron: [
-    'view_cost_price', 'view_profit', 'view_all_agencies', 'manage_users',
-    'create_invoice', 'approve_commission', 'view_reports', 'edit_stock',
-    'view_accounting', 'view_dashboard_full', 'view_salary_info',
+const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
+  OWNER: [
+    'view_dashboard_full', 'view_cost_price', 'view_profit', 'view_reports',
+    'view_accounting', 'view_all_agencies', 'view_salary_info',
+    'create_invoice', 'manage_users', 'approve_commission', 'edit_stock',
     'export_data', 'delete_records', 'manage_settings',
   ],
-  mudur: [
-    'view_cost_price', 'view_profit', 'view_all_agencies',
-    'create_invoice', 'approve_commission', 'view_reports', 'edit_stock',
-    'view_accounting', 'view_dashboard_full', 'export_data',
+  ADMIN: [
+    'view_dashboard_full', 'view_cost_price', 'view_profit', 'view_reports',
+    'view_accounting', 'view_all_agencies',
+    'create_invoice', 'approve_commission', 'edit_stock',
+    'export_data', 'manage_settings',
   ],
-  muhasebeci: [
-    'view_cost_price', 'view_profit', 'create_invoice',
-    'view_reports', 'view_accounting', 'export_data',
+  MANAGER: [
+    'view_dashboard_full', 'view_cost_price', 'view_profit', 'view_reports',
+    'view_accounting', 'view_all_agencies',
+    'create_invoice', 'approve_commission', 'edit_stock', 'export_data',
   ],
-  satis_elemani: [
-    'create_invoice', 'view_reports',
+  ACCOUNTANT: [
+    'view_cost_price', 'view_profit', 'view_reports', 'view_accounting',
+    'create_invoice', 'export_data',
   ],
-  acente: [
-    'view_reports',
-  ],
+  SALES: ['create_invoice', 'view_reports'],
+  VIEWER: ['view_reports'],
 }
 
-const roleLabels: Record<UserRole, string> = {
-  patron: 'Patron',
-  mudur: 'Müdür',
-  muhasebeci: 'Muhasebeci',
-  satis_elemani: 'Satış Elemanı',
-  acente: 'Acente',
+export const roleLabels: Record<UserRole, string> = {
+  OWNER: 'Patron',
+  ADMIN: 'Yönetici',
+  MANAGER: 'Müdür',
+  SALES: 'Satış',
+  ACCOUNTANT: 'Muhasebeci',
+  VIEWER: 'Görüntüleyici',
 }
 
-export { roleLabels }
+// ── Context ────────────────────────────────────────────────
 
-// Demo users for development
-const demoUsers: Record<string, { password: string; user: User }> = {
-  'patron@koyuncu.com': {
-    password: 'patron123',
-    user: {
-      id: 'u1',
-      name: 'Ahmet Koyuncu',
-      email: 'patron@koyuncu.com',
-      role: 'patron',
-    },
-  },
-  'mudur@koyuncu.com': {
-    password: 'mudur123',
-    user: {
-      id: 'u2',
-      name: 'Mehmet Yılmaz',
-      email: 'mudur@koyuncu.com',
-      role: 'mudur',
-    },
-  },
-  'muhasebe@koyuncu.com': {
-    password: 'muhasebe123',
-    user: {
-      id: 'u3',
-      name: 'Ayşe Demir',
-      email: 'muhasebe@koyuncu.com',
-      role: 'muhasebeci',
-    },
-  },
-  'satis@koyuncu.com': {
-    password: 'satis123',
-    user: {
-      id: 'u4',
-      name: 'Ali Çelik',
-      email: 'satis@koyuncu.com',
-      role: 'satis_elemani',
-    },
-  },
-  'acente@koyuncu.com': {
-    password: 'acente123',
-    user: {
-      id: 'u5',
-      name: 'John Smith',
-      email: 'acente@koyuncu.com',
-      role: 'acente',
-      agencyId: 'ag1',
-      agencyName: 'ABC Trading LLC',
-    },
-  },
+interface AuthContextType {
+  user: AuthUser | null
+  branches: AuthBranch[]
+  activeBranch: AuthBranch | null
+  isAuthenticated: boolean
+  needsBranchSelection: boolean
+  role: UserRole | null
+  login: (email: string, password: string) => Promise<boolean>
+  logout: () => Promise<void>
+  selectBranch: (branchId: string) => void
+  hasPermission: (permission: Permission) => boolean
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const AuthContext = createContext<AuthContextType | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('koyuncu_user')
-    return saved ? JSON.parse(saved) : null
-  })
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [branches, setBranches] = useState<AuthBranch[]>([])
+  const [activeBranch, setActiveBranchState] = useState<AuthBranch | null>(null)
+  const [token, setToken] = useState<string | null>(null)
 
-  const login = useCallback(async (email: string, _password: string): Promise<boolean> => {
-    const entry = demoUsers[email]
-    if (entry) {
-      setUser(entry.user)
-      localStorage.setItem('koyuncu_user', JSON.stringify(entry.user))
+  const isAuthenticated = !!user && !!activeBranch
+  const needsBranchSelection = !!user && !activeBranch && branches.length > 1
+  const role = activeBranch?.role ?? null
+
+  const login = useCallback(async (email: string, password: string): Promise<boolean> => {
+    try {
+      const result = await api.login(email, password)
+      if (!result.success) return false
+
+      const { token: newToken, user: userData, branches: branchData } = result.data
+      setToken(newToken)
+      setAuthToken(newToken)
+      setUser(userData)
+      setBranches(branchData)
+
+      if (branchData.length === 1) {
+        setActiveBranchState(branchData[0])
+        setActiveBranch(branchData[0].branchId)
+      }
+
       return true
+    } catch {
+      return false
     }
-    return false
   }, [])
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    try { if (token) await api.logout(token) } catch { /* ignore */ }
+    setToken(null)
+    setAuthToken(null)
     setUser(null)
-    localStorage.removeItem('koyuncu_user')
-  }, [])
+    setBranches([])
+    setActiveBranchState(null)
+    setActiveBranch(null)
+  }, [token])
 
-  const hasPermission = useCallback(
-    (permission: Permission): boolean => {
-      if (!user) return false
-      return rolePermissions[user.role].includes(permission)
-    },
-    [user],
-  )
+  const selectBranch = useCallback((branchId: string) => {
+    const branch = branches.find((b) => b.branchId === branchId)
+    if (branch) {
+      setActiveBranchState(branch)
+      setActiveBranch(branchId)
+    }
+  }, [branches])
+
+  const hasPermission = useCallback((permission: Permission): boolean => {
+    if (!role) return false
+    return ROLE_PERMISSIONS[role]?.includes(permission) ?? false
+  }, [role])
+
+  useEffect(() => {
+    const existingToken = getAuthToken()
+    if (existingToken && !user) {
+      api.me(existingToken).then((result) => {
+        if (result.success) {
+          setToken(existingToken)
+          setUser(result.data.user)
+          setBranches(result.data.branches)
+        }
+      }).catch(() => {})
+    }
+  }, [])
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated: !!user,
-        login,
-        logout,
-        hasPermission,
-        canViewCost: hasPermission('view_cost_price'),
-        canViewProfit: hasPermission('view_profit'),
-        canViewAllAgencies: hasPermission('view_all_agencies'),
-        canManageUsers: hasPermission('manage_users'),
-        canCreateInvoice: hasPermission('create_invoice'),
-        canApproveCommission: hasPermission('approve_commission'),
-        canViewReports: hasPermission('view_reports'),
-        canEditStock: hasPermission('edit_stock'),
-      }}
-    >
+    <AuthContext.Provider value={{
+      user, branches, activeBranch, isAuthenticated, needsBranchSelection,
+      role, login, logout, selectBranch, hasPermission,
+    }}>
       {children}
     </AuthContext.Provider>
   )
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext)
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider')
-  }
-  return context
+  const ctx = useContext(AuthContext)
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider')
+  return ctx
 }

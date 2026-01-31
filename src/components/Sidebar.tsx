@@ -1,32 +1,33 @@
 import { NavLink } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  LayoutDashboard, Users, ShoppingCart, Truck, BookOpen,
+  LayoutDashboard, Users, ShoppingCart, BookOpen,
   FileText, Settings, BarChart3, Handshake, Package,
-  Receipt, TrendingUp, Award, LogOut, ChevronDown, Activity,
+  Receipt, TrendingUp, Award, LogOut, Activity, Building2,
 } from 'lucide-react'
 import { useAuth, roleLabels, type UserRole } from '../contexts/AuthContext'
 
 const roleColors: Record<UserRole, string> = {
-  patron: 'from-amber-500 to-orange-600',
-  mudur: 'from-blue-500 to-indigo-600',
-  muhasebeci: 'from-emerald-500 to-teal-600',
-  satis_elemani: 'from-purple-500 to-violet-600',
-  acente: 'from-rose-500 to-pink-600',
+  OWNER: 'from-amber-500 to-orange-600',
+  ADMIN: 'from-blue-500 to-indigo-600',
+  MANAGER: 'from-cyan-500 to-blue-600',
+  ACCOUNTANT: 'from-emerald-500 to-teal-600',
+  SALES: 'from-purple-500 to-violet-600',
+  VIEWER: 'from-gray-400 to-gray-500',
 }
 
 export default function Sidebar() {
-  const { user, logout, hasPermission } = useAuth()
+  const { user, activeBranch, role, logout, hasPermission } = useAuth()
 
   const navItems = [
     { to: '/', icon: LayoutDashboard, label: 'Gösterge Paneli', show: true },
-    { to: '/accounts', icon: Users, label: 'Cariler', show: user?.role !== 'acente' },
+    { to: '/accounts', icon: Users, label: 'Cariler', show: role !== 'VIEWER' },
     { to: '/orders', icon: ShoppingCart, label: 'Siparişler', show: true },
-    { to: '/inventory', icon: Package, label: 'Ürün Kataloğu', show: user?.role !== 'acente' },
-    { to: '/stock-analysis', icon: TrendingUp, label: 'Stok & Analiz', show: user?.role !== 'acente' },
+    { to: '/inventory', icon: Package, label: 'Ürün Kataloğu', show: role !== 'VIEWER' },
+    { to: '/stock-analysis', icon: TrendingUp, label: 'Stok & Analiz', show: role !== 'VIEWER' },
     { to: '/invoices', icon: Receipt, label: 'Faturalar', show: hasPermission('create_invoice') || hasPermission('view_accounting') },
     { to: '/commissions', icon: Handshake, label: 'Komisyonlar', show: true },
-    { to: '/performance', icon: Award, label: 'Performans', show: user?.role !== 'satis_elemani' },
+    { to: '/performance', icon: Award, label: 'Performans', show: role !== 'SALES' && role !== 'VIEWER' },
     { to: '/accounting', icon: BookOpen, label: 'Muhasebe', show: hasPermission('view_accounting') },
     { to: '/profit', icon: BarChart3, label: 'Kâr Analizi', show: hasPermission('view_profit') },
     { to: '/reports', icon: FileText, label: 'Raporlar', show: hasPermission('view_reports') },
@@ -50,6 +51,16 @@ export default function Sidebar() {
           </p>
         </div>
       </div>
+
+      {/* Active Branch */}
+      {activeBranch && (
+        <div className="mx-3 mb-2 flex items-center gap-2 rounded-xl bg-brand-50 dark:bg-brand-900/20 px-3 py-2 border border-brand-100 dark:border-brand-800/30">
+          <Building2 className="h-3.5 w-3.5 text-brand-600 dark:text-brand-400" />
+          <span className="text-[11px] font-medium text-brand-700 dark:text-brand-300 truncate">
+            {activeBranch.branchName}
+          </span>
+        </div>
+      )}
 
       {/* Navigation */}
       <nav className="flex-1 space-y-0.5 px-3 py-4 overflow-y-auto">
@@ -85,14 +96,14 @@ export default function Sidebar() {
 
       {/* User Info & Logout */}
       <div className="border-t border-border dark:border-border-dark px-3 py-3 space-y-2">
-        {user && (
+        {user && role && (
           <div className="flex items-center gap-2.5 px-3 py-2">
-            <div className={`flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br ${roleColors[user.role]} text-white font-bold text-xs shrink-0`}>
-              {user.name.split(' ').map(n => n[0]).join('')}
+            <div className={`flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br ${roleColors[role]} text-white font-bold text-xs shrink-0`}>
+              {user.fullName.split(' ').map(n => n[0]).join('')}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium text-gray-900 dark:text-white truncate">{user.name}</p>
-              <p className="text-[10px] text-gray-500 dark:text-gray-400">{roleLabels[user.role]}</p>
+              <p className="text-xs font-medium text-gray-900 dark:text-white truncate">{user.fullName}</p>
+              <p className="text-[10px] text-gray-500 dark:text-gray-400">{roleLabels[role]}</p>
             </div>
           </div>
         )}
