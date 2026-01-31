@@ -4,7 +4,7 @@ import {
   DollarSign, TrendingUp, Truck, AlertCircle, ArrowUpRight,
   ArrowDownRight, ShoppingCart, Users, Package, Ship, Clock,
   CheckCircle, AlertTriangle, ArrowRight, Palette, FileText,
-  CreditCard, Plus, Activity, Eye, XCircle,
+  CreditCard, Plus, Activity, XCircle, Sparkles,
 } from 'lucide-react'
 import {
   AreaChart, Area, ResponsiveContainer, BarChart, Bar,
@@ -19,7 +19,7 @@ const MiniArea = ({ data, color }: { data: { v: number }[]; color: string }) => 
     <AreaChart data={data}>
       <defs>
         <linearGradient id={`grad-${color}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity={0.2} />
+          <stop offset="0%" stopColor={color} stopOpacity={0.15} />
           <stop offset="100%" stopColor={color} stopOpacity={0} />
         </linearGradient>
       </defs>
@@ -31,7 +31,7 @@ const MiniArea = ({ data, color }: { data: { v: number }[]; color: string }) => 
 const MiniBar = ({ data, color }: { data: { v: number }[]; color: string }) => (
   <ResponsiveContainer width="100%" height="100%">
     <BarChart data={data}>
-      <Bar dataKey="v" fill={color} radius={[3, 3, 0, 0]} opacity={0.7} />
+      <Bar dataKey="v" fill={color} radius={[3, 3, 0, 0]} opacity={0.6} />
     </BarChart>
   </ResponsiveContainer>
 )
@@ -42,24 +42,22 @@ const defaultChartData = [
   { v: 102 }, { v: 110 },
 ]
 
-// ── Activity Feed Data ──────────────────────────────────────
+// ── Activity Feed ──────────────────────────────────────
 const activityFeed = [
-  { id: 'a1', type: 'order' as const, icon: ShoppingCart, color: 'text-brand-600 bg-brand-50 dark:bg-brand-900/20', title: 'Yeni sipariş oluşturuldu', desc: 'ORD-2026-0152 — Dubai Interiors LLC ($78,400)', time: '3 dk önce', user: 'Ahmet Koyuncu' },
-  { id: 'a2', type: 'payment' as const, icon: CreditCard, color: 'text-green-600 bg-green-50 dark:bg-green-900/20', title: 'Tahsilat kaydedildi', desc: 'HomeStyle Inc. — $45,000 banka havalesi', time: '18 dk önce', user: 'Zeynep Demir' },
-  { id: 'a3', type: 'shipment' as const, icon: Ship, color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20', title: 'Sevkiyat yola çıktı', desc: 'SHP-2026-0089 — Maersk Line, New York', time: '1 saat önce', user: 'Murat Yılmaz' },
-  { id: 'a4', type: 'sample' as const, icon: Palette, color: 'text-purple-600 bg-purple-50 dark:bg-purple-900/20', title: 'Numune onaylandı', desc: 'NUM-2026-0067 — HomeStyle Inc. toplu siparişe dönecek', time: '2 saat önce', user: 'Elif Aktaş' },
-  { id: 'a5', type: 'invoice' as const, icon: FileText, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20', title: 'Fatura kesildi', desc: 'INV-2026-0198 — Berlin Teppich GmbH ($34,200)', time: '3 saat önce', user: 'Zeynep Demir' },
-  { id: 'a6', type: 'account' as const, icon: Users, color: 'text-cyan-600 bg-cyan-50 dark:bg-cyan-900/20', title: 'Yeni cari eklendi', desc: 'Pacific Rugs — San Francisco, ABD', time: '5 saat önce', user: 'Ahmet Koyuncu' },
+  { id: 'a1', icon: ShoppingCart, color: 'text-brand-600 bg-brand-50 dark:bg-brand-900/15', title: 'Yeni sipariş oluşturuldu', desc: 'ORD-2026-0152 — Dubai Interiors LLC ($78,400)', time: '3 dk önce', user: 'Ahmet K.' },
+  { id: 'a2', icon: CreditCard, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/15', title: 'Tahsilat kaydedildi', desc: 'HomeStyle Inc. — $45,000 banka havalesi', time: '18 dk önce', user: 'Zeynep D.' },
+  { id: 'a3', icon: Ship, color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/15', title: 'Sevkiyat yola çıktı', desc: 'SHP-2026-0089 — Maersk Line, New York', time: '1 saat', user: 'Murat Y.' },
+  { id: 'a4', icon: Palette, color: 'text-purple-600 bg-purple-50 dark:bg-purple-900/15', title: 'Numune onaylandı', desc: 'NUM-2026-0067 — HomeStyle Inc.', time: '2 saat', user: 'Elif A.' },
+  { id: 'a5', icon: FileText, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/15', title: 'Fatura kesildi', desc: 'INV-2026-0198 — Berlin Teppich GmbH ($34,200)', time: '3 saat', user: 'Zeynep D.' },
 ]
 
-// ── Alerts ───────────────────────────────────────────────────
+// ── Alerts ───────────────────────────────────────────────
 const alerts = [
   { id: 'al1', severity: 'critical' as const, icon: XCircle, title: 'Vadesi 30+ gün geçmiş', desc: 'Desert Home Decor — $33,984', action: 'Cariye Git', path: '/accounts' },
-  { id: 'al2', severity: 'warning' as const, icon: AlertTriangle, title: 'Kritik stok seviyesi', desc: 'Bambu Halı Doğal: 12 adet (min: 25)', action: 'Stok Detay', path: '/stock-analysis' },
-  { id: 'al3', severity: 'warning' as const, icon: Clock, title: 'Onay bekleyen komisyon', desc: 'ABC Trading LLC — $12,340', action: 'Komisyonlar', path: '/commissions' },
+  { id: 'al2', severity: 'warning' as const, icon: AlertTriangle, title: 'Kritik stok seviyesi', desc: 'Bambu Halı Doğal: 12 adet', action: 'Stok Detay', path: '/stock-analysis' },
 ]
 
-// ── Order Pipeline ───────────────────────────────────────────
+// ── Order Pipeline ───────────────────────────────────────
 const orderPipeline = [
   { label: 'Teklif', count: 8, amount: '$124K', color: '#94a3b8' },
   { label: 'Onaylandı', count: 12, amount: '$286K', color: '#4c6ef5' },
@@ -67,10 +65,9 @@ const orderPipeline = [
   { label: 'Sevkiyatta', count: 4, amount: '$95K', color: '#8b5cf6' },
   { label: 'Teslim', count: 22, amount: '$520K', color: '#22c55e' },
 ]
-
 const pieData = orderPipeline.map(p => ({ name: p.label, value: p.count }))
 
-// ── Top Customers ────────────────────────────────────────────
+// ── Top Customers ────────────────────────────────────────
 const topCustomers = [
   { name: 'HomeStyle Inc.', city: 'New York', revenue: '$145,200', orders: 8, trend: '+23%' },
   { name: 'Dubai Interiors LLC', city: 'Dubai', revenue: '$128,400', orders: 6, trend: '+18%' },
@@ -79,7 +76,7 @@ const topCustomers = [
   { name: 'Luxury Floors NY', city: 'Los Angeles', revenue: '$76,500', orders: 3, trend: '-5%' },
 ]
 
-// ── Upcoming ─────────────────────────────────────────────────
+// ── Upcoming ─────────────────────────────────────────────
 const upcoming = [
   { label: 'SHP-2026-0089 ETA', detail: 'New York — 18 Şub', days: 18, icon: Ship },
   { label: 'SHP-2026-0088 ETA', detail: 'Los Angeles — 08 Şub', days: 8, icon: Ship },
@@ -87,9 +84,19 @@ const upcoming = [
   { label: 'Komisyon ödeme', detail: 'ABC Trading LLC', days: 3, icon: CreditCard },
 ]
 
+// ── Quick Actions ────────────────────────────────────────
+const quickActions = [
+  { label: 'Yeni Sipariş', icon: Plus, gradient: 'from-brand-500 to-brand-700', path: '/orders' },
+  { label: 'Yeni Teklif', icon: FileText, gradient: 'from-blue-500 to-blue-700', path: '/quotations' },
+  { label: 'Numune Gönder', icon: Palette, gradient: 'from-purple-500 to-purple-700', path: '/samples' },
+  { label: 'Sevkiyat', icon: Ship, gradient: 'from-cyan-500 to-cyan-700', path: '/shipments' },
+  { label: 'Tahsilat', icon: CreditCard, gradient: 'from-emerald-500 to-emerald-700', path: '/accounting' },
+  { label: 'Rapor', icon: FileText, gradient: 'from-amber-500 to-amber-700', path: '/reports' },
+]
+
 export default function Dashboard() {
   const { data: kpis } = useDashboardKpisQuery()
-  const { user, role, hasPermission } = useAuth()
+  const { user } = useAuth()
   const navigate = useNavigate()
 
   const revenue = kpis?.monthlyRevenue ?? '$284,520'
@@ -108,239 +115,223 @@ export default function Dashboard() {
     return 'İyi akşamlar'
   })()
 
-  return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-            {greeting}, {user?.fullName?.split(' ')[0] ?? 'Kullanıcı'}
-          </h1>
-          <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-            İşte bugünkü iş durumunuzun özeti
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400">
-            {new Date().toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-          </span>
-        </div>
-      </div>
+  const stagger = {
+    hidden: {},
+    show: { transition: { staggerChildren: 0.04 } },
+  }
 
-      {/* Alerts Banner */}
-      {alerts.length > 0 && (
-        <div className="space-y-2">
-          {alerts.map((alert) => (
-            <motion.div
-              key={alert.id}
-              initial={{ opacity: 0, x: -12 }}
-              animate={{ opacity: 1, x: 0 }}
-              className={`flex items-center gap-3 rounded-xl px-4 py-2.5 ${
-                alert.severity === 'critical'
-                  ? 'bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30'
-                  : 'bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30'
-              }`}
-            >
-              <alert.icon className={`h-4 w-4 shrink-0 ${alert.severity === 'critical' ? 'text-red-500' : 'text-amber-500'}`} />
-              <div className="flex-1 min-w-0">
-                <span className={`text-xs font-semibold ${alert.severity === 'critical' ? 'text-red-700 dark:text-red-400' : 'text-amber-700 dark:text-amber-400'}`}>
-                  {alert.title}
-                </span>
-                <span className="text-xs text-gray-500 ml-2">{alert.desc}</span>
-              </div>
-              <button
-                onClick={() => navigate(alert.path)}
-                className={`shrink-0 text-[11px] font-medium rounded-lg px-2.5 py-1 transition-colors ${
-                  alert.severity === 'critical'
-                    ? 'text-red-600 hover:bg-red-100 dark:hover:bg-red-900/20'
-                    : 'text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/20'
-                }`}
-              >
-                {alert.action} →
-              </button>
-            </motion.div>
-          ))}
+  const fadeUp = {
+    hidden: { opacity: 0, y: 12 },
+    show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 300, damping: 25 } },
+  }
+
+  return (
+    <motion.div initial="hidden" animate="show" variants={stagger} className="space-y-5">
+      {/* Hero Header with mesh gradient */}
+      <motion.div variants={fadeUp} className="relative overflow-hidden rounded-3xl bg-white dark:bg-surface-dark-secondary border border-border dark:border-border-dark p-6">
+        <div className="mesh-gradient absolute inset-0 pointer-events-none" />
+        <div className="dot-pattern absolute inset-0 pointer-events-none opacity-40" />
+        <div className="relative flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Sparkles className="h-4 w-4 text-brand-500" />
+              <span className="text-[11px] font-semibold text-brand-600 dark:text-brand-400 uppercase tracking-wider">
+                {new Date().toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' })}
+              </span>
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              {greeting}, <span className="gradient-text">{user?.fullName?.split(' ')[0] ?? 'Kullanıcı'}</span>
+            </h1>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              İşte bugünkü iş durumunuzun özeti
+            </p>
+          </div>
+
+          {/* Alert badges */}
+          {alerts.length > 0 && (
+            <div className="hidden lg:flex flex-col gap-1.5">
+              {alerts.map((alert) => (
+                <button
+                  key={alert.id}
+                  onClick={() => navigate(alert.path)}
+                  className={`flex items-center gap-2 rounded-xl px-3 py-1.5 text-[11px] font-medium transition-all hover:-translate-y-0.5 ${
+                    alert.severity === 'critical'
+                      ? 'bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-800/20'
+                      : 'bg-amber-50 dark:bg-amber-900/10 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-800/20'
+                  }`}
+                >
+                  <alert.icon className="h-3 w-3" />
+                  <span>{alert.title}: {alert.desc}</span>
+                  <ArrowRight className="h-3 w-3" />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-      )}
+      </motion.div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard title="Aylık Gelir" value={revenue} change={revenueChange} changeType="positive" icon={DollarSign} chart={<MiniArea data={defaultChartData} color="#4c6ef5" />} />
-        <KpiCard title="Tahsilat Oranı" value={collectionRate} change={collectionChange} changeType="positive" icon={TrendingUp} chart={<MiniArea data={defaultChartData.slice(0, 8)} color="#40c057" />} />
-        <KpiCard title="Bekleyen Sevkiyat" value={pendingShipments} change={shipmentNote} changeType="neutral" icon={Truck} chart={<MiniBar data={defaultChartData.slice(0, 8)} color="#748ffc" />} />
-        <KpiCard title="Vadesi Geçen" value={overdueAmount} change={overdueChange} changeType="negative" icon={AlertCircle} chart={<MiniBar data={defaultChartData.slice(0, 8)} color="#fa5252" />} />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard title="Aylık Gelir" value={revenue} change={revenueChange} changeType="positive" icon={DollarSign} delay={0} chart={<MiniArea data={defaultChartData} color="#4c6ef5" />} />
+        <KpiCard title="Tahsilat Oranı" value={collectionRate} change={collectionChange} changeType="positive" icon={TrendingUp} delay={1} chart={<MiniArea data={defaultChartData.slice(0, 8)} color="#40c057" />} />
+        <KpiCard title="Bekleyen Sevkiyat" value={pendingShipments} change={shipmentNote} changeType="neutral" icon={Truck} delay={2} chart={<MiniBar data={defaultChartData.slice(0, 8)} color="#748ffc" />} />
+        <KpiCard title="Vadesi Geçen" value={overdueAmount} change={overdueChange} changeType="negative" icon={AlertCircle} delay={3} chart={<MiniBar data={defaultChartData.slice(0, 8)} color="#fa5252" />} />
       </div>
 
-      {/* Main Grid: Activity + Pipeline + Upcoming */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Activity Feed */}
-        <div className="lg:col-span-2 rounded-2xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark">
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-border dark:border-border-dark">
+      {/* Bento Grid: 3 columns */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+        {/* Activity Feed — spans 5 */}
+        <motion.div variants={fadeUp} className="lg:col-span-5 rounded-2xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark-secondary overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-border dark:border-border-dark">
             <div className="flex items-center gap-2">
-              <Activity className="h-4 w-4 text-brand-600" />
-              <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Son Aktiviteler</h2>
+              <Activity className="h-3.5 w-3.5 text-brand-600" />
+              <h2 className="text-[13px] font-semibold text-gray-900 dark:text-white">Son Aktiviteler</h2>
             </div>
             <button onClick={() => navigate('/activity')} className="text-[11px] text-brand-600 hover:text-brand-700 font-medium flex items-center gap-1">
-              Tümünü Gör <ArrowRight className="h-3 w-3" />
+              Tümü <ArrowRight className="h-3 w-3" />
             </button>
           </div>
           <div className="divide-y divide-border/50 dark:divide-border-dark/50">
             {activityFeed.map((item, i) => (
               <motion.div
                 key={item.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                className="flex items-start gap-3 px-5 py-3 hover:bg-surface-secondary/30 dark:hover:bg-surface-dark-secondary/30 transition-colors"
+                initial={{ opacity: 0, x: -8 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.1 + i * 0.04 }}
+                className="flex items-center gap-3 px-5 py-2.5 hover:bg-surface-secondary/40 dark:hover:bg-surface-dark-tertiary/40 transition-colors"
               >
-                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${item.color}`}>
-                  <item.icon className="h-4 w-4" />
+                <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${item.color}`}>
+                  <item.icon className="h-3.5 w-3.5" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[12px] font-semibold text-gray-900 dark:text-white">{item.title}</p>
-                  <p className="text-[11px] text-gray-500 mt-0.5 truncate">{item.desc}</p>
+                  <p className="text-[12px] font-medium text-gray-900 dark:text-white truncate">{item.title}</p>
+                  <p className="text-[10px] text-gray-400 truncate">{item.desc}</p>
                 </div>
-                <div className="shrink-0 text-right">
-                  <p className="text-[10px] text-gray-400">{item.time}</p>
-                  <p className="text-[10px] text-gray-400">{item.user}</p>
-                </div>
+                <span className="text-[10px] text-gray-400 shrink-0">{item.time}</span>
               </motion.div>
             ))}
           </div>
-        </div>
+        </motion.div>
 
-        {/* Right Column: Pipeline + Upcoming */}
-        <div className="space-y-4">
-          {/* Order Pipeline */}
-          <div className="rounded-2xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark p-5">
-            <h2 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">Sipariş Pipeline</h2>
-            <div className="flex items-center justify-center mb-4">
-              <div className="h-28 w-28">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={pieData} dataKey="value" cx="50%" cy="50%" innerRadius={30} outerRadius={50} paddingAngle={3} strokeWidth={0}>
-                      {pieData.map((_, i) => (
-                        <Cell key={i} fill={orderPipeline[i].color} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-            <div className="space-y-2">
-              {orderPipeline.map((stage) => (
-                <div key={stage.label} className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full" style={{ backgroundColor: stage.color }} />
-                    <span className="text-gray-600 dark:text-gray-400">{stage.label}</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-medium text-gray-900 dark:text-white">{stage.count}</span>
-                    <span className="text-gray-400 w-12 text-right">{stage.amount}</span>
-                  </div>
-                </div>
-              ))}
+        {/* Order Pipeline — spans 4 */}
+        <motion.div variants={fadeUp} className="lg:col-span-4 rounded-2xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark-secondary p-5">
+          <h2 className="text-[13px] font-semibold text-gray-900 dark:text-white mb-3">Sipariş Pipeline</h2>
+          <div className="flex items-center justify-center mb-3">
+            <div className="h-24 w-24">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={pieData} dataKey="value" cx="50%" cy="50%" innerRadius={28} outerRadius={44} paddingAngle={3} strokeWidth={0}>
+                    {pieData.map((_, i) => (
+                      <Cell key={i} fill={orderPipeline[i].color} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
             </div>
           </div>
+          <div className="space-y-1.5">
+            {orderPipeline.map((stage) => (
+              <div key={stage.label} className="flex items-center justify-between text-[11px]">
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full" style={{ backgroundColor: stage.color }} />
+                  <span className="text-gray-500 dark:text-gray-400">{stage.label}</span>
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <span className="font-semibold text-gray-900 dark:text-white">{stage.count}</span>
+                  <span className="text-gray-400 w-10 text-right">{stage.amount}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
 
-          {/* Upcoming Events */}
-          <div className="rounded-2xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark p-5">
-            <h2 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Yaklaşan</h2>
-            <div className="space-y-2.5">
+        {/* Quick Actions + Upcoming — spans 3 */}
+        <div className="lg:col-span-3 space-y-3">
+          {/* Quick Actions */}
+          <motion.div variants={fadeUp} className="rounded-2xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark-secondary p-4">
+            <h2 className="text-[13px] font-semibold text-gray-900 dark:text-white mb-3">Hızlı İşlemler</h2>
+            <div className="grid grid-cols-3 gap-1.5">
+              {quickActions.map((action) => (
+                <button
+                  key={action.label}
+                  onClick={() => navigate(action.path)}
+                  className="flex flex-col items-center gap-1.5 rounded-xl p-2.5 hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary transition-all hover:-translate-y-0.5 group"
+                >
+                  <div className={`flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br ${action.gradient} text-white shadow-sm group-hover:shadow-md transition-shadow`}>
+                    <action.icon className="h-3.5 w-3.5" />
+                  </div>
+                  <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">{action.label}</span>
+                </button>
+              ))}
+            </div>
+          </motion.div>
+
+          {/* Upcoming */}
+          <motion.div variants={fadeUp} className="rounded-2xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark-secondary p-4">
+            <h2 className="text-[13px] font-semibold text-gray-900 dark:text-white mb-2.5">Yaklaşan</h2>
+            <div className="space-y-2">
               {upcoming.map((item) => (
-                <div key={item.label} className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface-secondary dark:bg-surface-dark-secondary">
-                    <item.icon className="h-3.5 w-3.5 text-gray-500" />
+                <div key={item.label} className="flex items-center gap-2.5">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-secondary dark:bg-surface-dark-tertiary">
+                    <item.icon className="h-3 w-3 text-gray-400" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[12px] font-medium text-gray-900 dark:text-white truncate">{item.label}</p>
-                    <p className="text-[10px] text-gray-500">{item.detail}</p>
+                    <p className="text-[11px] font-medium text-gray-900 dark:text-white truncate">{item.label}</p>
+                    <p className="text-[10px] text-gray-400">{item.detail}</p>
                   </div>
-                  <span className={`text-[11px] font-semibold ${item.days <= 3 ? 'text-red-500' : item.days <= 7 ? 'text-amber-500' : 'text-gray-400'}`}>
-                    {item.days} gün
+                  <span className={`text-[10px] font-bold tabular-nums ${item.days <= 3 ? 'text-red-500' : item.days <= 7 ? 'text-amber-500' : 'text-gray-400'}`}>
+                    {item.days}g
                   </span>
                 </div>
               ))}
             </div>
-          </div>
+          </motion.div>
         </div>
       </div>
 
-      {/* Bottom Grid: Top Customers + Quick Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Top Customers */}
-        <div className="lg:col-span-2 rounded-2xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark">
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-border dark:border-border-dark">
-            <h2 className="text-sm font-semibold text-gray-900 dark:text-white">En İyi Müşteriler (Bu Ay)</h2>
-            <button onClick={() => navigate('/accounts')} className="text-[11px] text-brand-600 hover:text-brand-700 font-medium">
-              Tümü →
-            </button>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-border/50 dark:border-border-dark/50">
-                  <th className="text-left font-medium text-gray-400 px-5 py-2.5">Müşteri</th>
-                  <th className="text-right font-medium text-gray-400 px-5 py-2.5">Ciro</th>
-                  <th className="text-right font-medium text-gray-400 px-5 py-2.5">Sipariş</th>
-                  <th className="text-right font-medium text-gray-400 px-5 py-2.5">Trend</th>
+      {/* Bottom: Top Customers */}
+      <motion.div variants={fadeUp} className="rounded-2xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark-secondary overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-border dark:border-border-dark">
+          <h2 className="text-[13px] font-semibold text-gray-900 dark:text-white">En İyi Müşteriler (Bu Ay)</h2>
+          <button onClick={() => navigate('/accounts')} className="text-[11px] text-brand-600 hover:text-brand-700 font-medium">
+            Tümü →
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-[12px]">
+            <thead>
+              <tr className="border-b border-border/50 dark:border-border-dark/50">
+                <th className="text-left font-medium text-gray-400 px-5 py-2">#</th>
+                <th className="text-left font-medium text-gray-400 px-5 py-2">Müşteri</th>
+                <th className="text-right font-medium text-gray-400 px-5 py-2">Ciro</th>
+                <th className="text-right font-medium text-gray-400 px-5 py-2">Sipariş</th>
+                <th className="text-right font-medium text-gray-400 px-5 py-2">Trend</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/30 dark:divide-border-dark/30">
+              {topCustomers.map((c, i) => (
+                <tr key={c.name} className="hover:bg-surface-secondary/40 dark:hover:bg-surface-dark-tertiary/40 transition-colors">
+                  <td className="px-5 py-2">
+                    <span className="text-[10px] font-bold text-gray-300 dark:text-gray-600">{String(i + 1).padStart(2, '0')}</span>
+                  </td>
+                  <td className="px-5 py-2">
+                    <p className="font-medium text-gray-900 dark:text-white">{c.name}</p>
+                    <p className="text-[10px] text-gray-400">{c.city}</p>
+                  </td>
+                  <td className="text-right px-5 py-2 font-semibold text-gray-900 dark:text-white tabular-nums">{c.revenue}</td>
+                  <td className="text-right px-5 py-2 text-gray-500 tabular-nums">{c.orders}</td>
+                  <td className="text-right px-5 py-2">
+                    <span className={`inline-flex items-center gap-0.5 font-semibold ${c.trend.startsWith('+') ? 'text-emerald-600' : 'text-red-500'}`}>
+                      {c.trend.startsWith('+') ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                      {c.trend}
+                    </span>
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-border/30 dark:divide-border-dark/30">
-                {topCustomers.map((c, i) => (
-                  <tr key={c.name} className="hover:bg-surface-secondary/30 dark:hover:bg-surface-dark-secondary/30 transition-colors">
-                    <td className="px-5 py-2.5">
-                      <div className="flex items-center gap-2.5">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-50 dark:bg-brand-900/20 text-brand-600 text-[10px] font-bold">
-                          {i + 1}
-                        </div>
-                        <div>
-                          <p className="font-medium text-gray-900 dark:text-white">{c.name}</p>
-                          <p className="text-[10px] text-gray-400">{c.city}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="text-right px-5 py-2.5 font-semibold text-gray-900 dark:text-white">{c.revenue}</td>
-                    <td className="text-right px-5 py-2.5 text-gray-500">{c.orders}</td>
-                    <td className="text-right px-5 py-2.5">
-                      <span className={`inline-flex items-center gap-0.5 font-medium ${c.trend.startsWith('+') ? 'text-green-600' : 'text-red-500'}`}>
-                        {c.trend.startsWith('+') ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                        {c.trend}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
-
-        {/* Quick Actions */}
-        <div className="rounded-2xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark p-5">
-          <h2 className="text-sm font-semibold text-gray-900 dark:text-white mb-4">Hızlı İşlemler</h2>
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              { label: 'Yeni Sipariş', icon: Plus, color: 'text-brand-600 bg-brand-50 dark:bg-brand-900/20', path: '/orders' },
-              { label: 'Yeni Teklif', icon: FileText, color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20', path: '/quotations' },
-              { label: 'Numune Gönder', icon: Palette, color: 'text-purple-600 bg-purple-50 dark:bg-purple-900/20', path: '/samples' },
-              { label: 'Sevkiyat Oluştur', icon: Ship, color: 'text-cyan-600 bg-cyan-50 dark:bg-cyan-900/20', path: '/shipments' },
-              { label: 'Tahsilat Kaydet', icon: CreditCard, color: 'text-green-600 bg-green-50 dark:bg-green-900/20', path: '/accounting' },
-              { label: 'Rapor Oluştur', icon: FileText, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20', path: '/reports' },
-            ].map((action) => (
-              <button
-                key={action.label}
-                onClick={() => navigate(action.path)}
-                className="flex flex-col items-center gap-2 rounded-xl border border-border/50 dark:border-border-dark/50 p-3 hover:border-brand-300 dark:hover:border-brand-700 hover:shadow-sm transition-all group"
-              >
-                <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${action.color} group-hover:scale-110 transition-transform`}>
-                  <action.icon className="h-4 w-4" />
-                </div>
-                <span className="text-[11px] font-medium text-gray-600 dark:text-gray-400">{action.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+      </motion.div>
     </motion.div>
   )
 }
