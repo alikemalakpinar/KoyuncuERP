@@ -1,281 +1,234 @@
 /**
  * Platinum IPC Handlers – Inventory FIFO, Pricing, Finance
- *
- * New handlers for the Platinum Edition features:
- * - inventory:receiveLot, inventory:allocate, inventory:fulfill, inventory:lots, inventory:transactions
- * - pricing:resolve, pricing:lists, pricing:createList, pricing:addItem, pricing:assignToAccount
- * - finance:lockPeriod, finance:getLatestLock, finance:agingReport, finance:fxRevaluation, finance:postFxRevaluation
+ * All branch-scoped and permission-protected.
  */
 
 import type { IpcMain } from 'electron'
-import { getDb } from '../db'
+import { protectedProcedure } from './_secure'
+import { writeAuditLog } from './audit'
 import { InventoryService } from '../services/inventory'
 import { PricingService } from '../services/pricing'
 import { FinanceService } from '../services/finance'
-import { writeAuditLog } from './audit'
 
 export function registerPlatinumHandlers(ipcMain: IpcMain) {
-  // Lazy service init (db may not be ready at registration time)
-  const getServices = () => {
-    const db = getDb()
-    return {
-      inventory: new InventoryService(db),
-      pricing: new PricingService(db),
-      finance: new FinanceService(db),
-    }
-  }
+  // ═══ INVENTORY – FIFO Lot Management ═══
 
-  // ═══════════════════════════════════════════════════════════
-  // INVENTORY – FIFO Lot Management
-  // ═══════════════════════════════════════════════════════════
-
-  ipcMain.handle('inventory:receiveLot', async (_event, data: {
-    productId: string
-    variantId: string
-    warehouseId: string
-    quantity: string
-    unitCost: string
-    batchNo?: string
+  ipcMain.handle('inventory:receiveLot', protectedProcedure('manage_inventory', async (ctx, data: {
+    productId: string; variantId: string; warehouseId: string
+    quantity: string; unitCost: string; batchNo?: string
   }) => {
     try {
-      const { inventory } = getServices()
-      const result = await inventory.receiveLot(data)
-
+      const svc = new InventoryService(ctx.prisma)
+      const result = await svc.receiveLot({ ...data, branchId: ctx.activeBranchId })
       await writeAuditLog({
-        entityType: 'InventoryLot',
-        entityId: result.data?.id ?? '',
-        action: 'CREATE',
-        newData: data,
+        entityType: 'InventoryLot', entityId: result.data?.id ?? '',
+        action: 'CREATE', newData: data,
+        userId: ctx.user.id, branchId: ctx.activeBranchId,
         description: `Lot girişi: ${data.quantity} adet @ $${data.unitCost}`,
       })
-
       return result
     } catch (error: any) {
       return { success: false, error: error.message }
     }
-  })
+  }))
 
-  ipcMain.handle('inventory:allocate', async (_event, data: {
-    variantId: string
-    warehouseId: string
-    quantity: string
-    orderId: string
+  ipcMain.handle('inventory:allocate', protectedProcedure('manage_inventory', async (ctx, data: {
+    variantId: string; warehouseId: string; quantity: string; orderId: string
   }) => {
     try {
-      const { inventory } = getServices()
-      return await inventory.allocate(data)
+      const svc = new InventoryService(ctx.prisma)
+      return await svc.allocate(data)
     } catch (error: any) {
       return { success: false, error: error.message }
     }
-  })
+  }))
 
-  ipcMain.handle('inventory:fulfill', async (_event, data: {
-    variantId: string
-    warehouseId: string
-    quantity: string
-    orderId: string
-    orderNo: string
+  ipcMain.handle('inventory:fulfill', protectedProcedure('manage_inventory', async (ctx, data: {
+    variantId: string; warehouseId: string; quantity: string; orderId: string; orderNo: string
   }) => {
     try {
-      const { inventory } = getServices()
-      const result = await inventory.fulfillFifo(data)
-
+      const svc = new InventoryService(ctx.prisma)
+      const result = await svc.fulfillFifo(data)
       if (result.success && result.data) {
-        // Create COGS ledger entry
-        const db = getDb()
         const entryNo = `COGS-${Date.now().toString(36).toUpperCase()}`
-        await db.ledgerEntry.create({
+        await ctx.prisma.ledgerEntry.create({
           data: {
-            entryNo,
-            accountId: data.orderId, // Will be resolved to proper account
-            type: 'ADJUSTMENT',
-            debit: result.data.totalCogs,
-            credit: '0',
-            currency: 'USD',
-            exchangeRate: '1',
-            costCenter: 'COGS',
-            description: `SMM kaydı – ${data.orderNo}: $${result.data.totalCogs} (${result.data.lotsConsumed.length} lot)`,
-            referenceId: data.orderId,
-            referenceType: 'ORDER_COGS',
+            entryNo, accountId: data.orderId, // will be resolved
+            branchId: ctx.activeBranchId, type: 'ADJUSTMENT',
+            debit: result.data.totalCogs, credit: '0',
+            currency: 'USD', exchangeRate: '1', costCenter: 'COGS',
+            description: `SMM kaydı – ${data.orderNo}: $${result.data.totalCogs}`,
+            referenceId: data.orderId, referenceType: 'ORDER_COGS',
           },
         })
       }
-
       return result
     } catch (error: any) {
       return { success: false, error: error.message }
     }
-  })
+  }))
 
-  ipcMain.handle('inventory:lots', async (_event, variantId: string, warehouseId?: string) => {
-    try {
-      const { inventory } = getServices()
-      return await inventory.getLots(variantId, warehouseId)
-    } catch (error: any) {
-      return []
-    }
-  })
-
-  ipcMain.handle('inventory:transactions', async (_event, variantId: string, limit?: number) => {
-    try {
-      const { inventory } = getServices()
-      return await inventory.getTransactions(variantId, limit)
-    } catch (error: any) {
-      return []
-    }
-  })
-
-  // ═══════════════════════════════════════════════════════════
-  // PRICING – Multi-Price List Engine
-  // ═══════════════════════════════════════════════════════════
-
-  ipcMain.handle('pricing:resolve', async (_event, data: {
-    accountId: string
-    variantId: string
-    quantity?: string
+  ipcMain.handle('inventory:lots', protectedProcedure('read', async (ctx, args: {
+    variantId: string; warehouseId?: string
   }) => {
     try {
-      const { pricing } = getServices()
-      return await pricing.resolvePrice(data.accountId, data.variantId, data.quantity)
+      const where: any = {
+        variantId: args.variantId, branchId: ctx.activeBranchId,
+        remainingQuantity: { gt: 0 },
+      }
+      if (args.warehouseId) where.warehouseId = args.warehouseId
+      return ctx.prisma.inventoryLot.findMany({
+        where, orderBy: { receivedDate: 'asc' }, include: { warehouse: true },
+      })
+    } catch { return [] }
+  }))
+
+  ipcMain.handle('inventory:transactions', protectedProcedure('read', async (ctx, args: {
+    variantId: string; limit?: number
+  }) => {
+    try {
+      return ctx.prisma.inventoryTransaction.findMany({
+        where: { variantId: args.variantId, branchId: ctx.activeBranchId },
+        orderBy: { createdAt: 'desc' }, take: args.limit ?? 50,
+        include: { lot: true, warehouse: true },
+      })
+    } catch { return [] }
+  }))
+
+  // ═══ PRICING ═══
+
+  ipcMain.handle('pricing:resolve', protectedProcedure('read', async (ctx, data: {
+    accountId: string; variantId: string; quantity?: string
+  }) => {
+    try {
+      const svc = new PricingService(ctx.prisma)
+      return await svc.resolvePrice(data.accountId, data.variantId, data.quantity)
     } catch (error: any) {
       return { success: false, error: error.message }
     }
-  })
+  }))
 
-  ipcMain.handle('pricing:resolveBatch', async (_event, data: {
-    accountId: string
-    variants: { variantId: string; quantity: string }[]
+  ipcMain.handle('pricing:resolveBatch', protectedProcedure('read', async (ctx, data: {
+    accountId: string; variants: { variantId: string; quantity: string }[]
   }) => {
     try {
-      const { pricing } = getServices()
-      return await pricing.resolvePrices(data.accountId, data.variants)
-    } catch (error: any) {
-      return []
-    }
-  })
+      const svc = new PricingService(ctx.prisma)
+      return await svc.resolvePrices(data.accountId, data.variants)
+    } catch { return [] }
+  }))
 
-  ipcMain.handle('pricing:lists', async () => {
+  ipcMain.handle('pricing:lists', protectedProcedure('read', async (ctx) => {
     try {
-      const { pricing } = getServices()
-      return await pricing.listPriceLists()
-    } catch (error: any) {
-      return []
-    }
-  })
+      const svc = new PricingService(ctx.prisma)
+      return await svc.listPriceLists()
+    } catch { return [] }
+  }))
 
-  ipcMain.handle('pricing:createList', async (_event, data: {
-    name: string
-    currency: string
-    isDefault?: boolean
+  ipcMain.handle('pricing:createList', protectedProcedure('manage_settings', async (ctx, data: {
+    name: string; currency: string; isDefault?: boolean
   }) => {
     try {
-      const { pricing } = getServices()
-      const list = await pricing.createPriceList(data)
+      const svc = new PricingService(ctx.prisma)
+      const list = await svc.createPriceList(data)
       return { success: true, data: list }
     } catch (error: any) {
       return { success: false, error: error.message }
     }
-  })
+  }))
 
-  ipcMain.handle('pricing:addItem', async (_event, data: {
-    priceListId: string
-    variantId: string
-    price: string
-    minQuantity?: string
+  ipcMain.handle('pricing:addItem', protectedProcedure('manage_settings', async (ctx, data: {
+    priceListId: string; variantId: string; price: string; minQuantity?: string
   }) => {
     try {
-      const { pricing } = getServices()
-      const item = await pricing.addPriceListItem(data)
+      const svc = new PricingService(ctx.prisma)
+      const item = await svc.addPriceListItem(data)
       return { success: true, data: item }
     } catch (error: any) {
       return { success: false, error: error.message }
     }
-  })
+  }))
 
-  ipcMain.handle('pricing:assignToAccount', async (_event, accountId: string, priceListId: string) => {
+  ipcMain.handle('pricing:assignToAccount', protectedProcedure('manage_accounts', async (ctx, args: {
+    accountId: string; priceListId: string
+  }) => {
     try {
-      const { pricing } = getServices()
-      const account = await pricing.assignPriceListToAccount(accountId, priceListId)
-      return { success: true, data: account }
+      // Verify account belongs to branch
+      const acc = await ctx.prisma.account.findFirst({
+        where: { id: args.accountId, branchId: ctx.activeBranchId },
+      })
+      if (!acc) return { success: false, error: 'Cari bu şubeye ait değil.' }
+      const svc = new PricingService(ctx.prisma)
+      const result = await svc.assignPriceListToAccount(args.accountId, args.priceListId)
+      return { success: true, data: result }
     } catch (error: any) {
       return { success: false, error: error.message }
     }
-  })
+  }))
 
-  // ═══════════════════════════════════════════════════════════
-  // FINANCE – Period Lock, Aging, FX Revaluation
-  // ═══════════════════════════════════════════════════════════
+  // ═══ FINANCE ═══
 
-  ipcMain.handle('finance:lockPeriod', async (_event, data: {
-    closingDate: string
-    lockedBy: string
-    notes?: string
+  ipcMain.handle('finance:lockPeriod', protectedProcedure('lock_period', async (ctx, data: {
+    closingDate: string; notes?: string
   }) => {
     try {
-      const { finance } = getServices()
-      const result = await finance.lockPeriod(new Date(data.closingDate), data.lockedBy, data.notes)
-
+      const svc = new FinanceService(ctx.prisma)
+      const result = await svc.lockPeriod(
+        new Date(data.closingDate), ctx.user.id, data.notes, ctx.activeBranchId,
+      )
       if (result.success) {
         await writeAuditLog({
-          entityType: 'PeriodLock',
-          entityId: result.data?.id ?? '',
-          action: 'CREATE',
-          newData: data,
+          entityType: 'PeriodLock', entityId: result.data?.id ?? '',
+          action: 'CREATE', newData: data,
+          userId: ctx.user.id, branchId: ctx.activeBranchId,
           description: `Dönem kilitlendi: ${data.closingDate}`,
         })
       }
-
       return result
     } catch (error: any) {
       return { success: false, error: error.message }
     }
-  })
+  }))
 
-  ipcMain.handle('finance:getLatestLock', async () => {
+  ipcMain.handle('finance:getLatestLock', protectedProcedure('read', async (ctx) => {
     try {
-      const { finance } = getServices()
-      return await finance.getLatestLock()
-    } catch (error: any) {
-      return null
-    }
-  })
+      const svc = new FinanceService(ctx.prisma)
+      return await svc.getLatestLock(ctx.activeBranchId)
+    } catch { return null }
+  }))
 
-  ipcMain.handle('finance:isDateLocked', async (_event, dateStr: string) => {
+  ipcMain.handle('finance:isDateLocked', protectedProcedure('read', async (ctx, args: { date: string }) => {
     try {
-      const { finance } = getServices()
-      return await finance.isDateLocked(new Date(dateStr))
-    } catch (error: any) {
-      return false
-    }
-  })
+      const svc = new FinanceService(ctx.prisma)
+      return await svc.isDateLocked(new Date(args.date), ctx.activeBranchId)
+    } catch { return false }
+  }))
 
-  ipcMain.handle('finance:agingReport', async () => {
+  ipcMain.handle('finance:agingReport', protectedProcedure('view_analytics', async (ctx) => {
     try {
-      const { finance } = getServices()
-      return await finance.generateAgingReport()
-    } catch (error: any) {
-      return []
-    }
-  })
+      const svc = new FinanceService(ctx.prisma)
+      return await svc.generateAgingReport(ctx.activeBranchId)
+    } catch { return [] }
+  }))
 
-  ipcMain.handle('finance:fxRevaluation', async (_event, currentRates: Record<string, number>) => {
-    try {
-      const { finance } = getServices()
-      return await finance.calculateFxRevaluation(currentRates)
-    } catch (error: any) {
-      return { items: [], totalGain: '0.00', totalLoss: '0.00', netGainLoss: '0.00' }
-    }
-  })
-
-  ipcMain.handle('finance:postFxRevaluation', async (_event, data: {
-    items: any[]
-    postedBy: string
+  ipcMain.handle('finance:fxRevaluation', protectedProcedure('manage_ledger', async (ctx, args: {
+    currentRates: Record<string, number>
   }) => {
     try {
-      const { finance } = getServices()
-      return await finance.postFxRevaluation(data.items, data.postedBy)
+      const svc = new FinanceService(ctx.prisma)
+      return await svc.calculateFxRevaluation(args.currentRates, ctx.activeBranchId)
+    } catch {
+      return { items: [], totalGain: '0.00', totalLoss: '0.00', netGainLoss: '0.00' }
+    }
+  }))
+
+  ipcMain.handle('finance:postFxRevaluation', protectedProcedure('manage_ledger', async (ctx, args: {
+    items: any[]
+  }) => {
+    try {
+      const svc = new FinanceService(ctx.prisma)
+      return await svc.postFxRevaluation(args.items, ctx.user.id, ctx.activeBranchId)
     } catch (error: any) {
       return { success: false, error: error.message }
     }
-  })
+  }))
 }

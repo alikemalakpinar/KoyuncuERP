@@ -1,8 +1,9 @@
 /**
- * Audit Log Helper
+ * Audit Log Helper – Server-Trustworthy
  *
  * Immutability principle: nothing is deleted, everything is logged.
- * Called from IPC handlers when critical entities change.
+ * Actor (userId, branchId) is ALWAYS derived from the validated session context.
+ * Never accept actor info from the client.
  */
 
 import { getDb } from '../db'
@@ -15,12 +16,13 @@ export type AuditAction =
   | 'REVERSAL'
 
 export interface AuditEntry {
-  entityType: string      // 'Order' | 'Account' | 'Shipment' | 'LedgerEntry'
+  entityType: string
   entityId: string
   action: AuditAction
-  previousData?: any      // JSON snapshot before change
-  newData?: any           // JSON snapshot after change
-  userId?: string         // future: authenticated user
+  previousData?: any
+  newData?: any
+  userId: string      // MUST come from session context
+  branchId: string    // MUST come from session context
   description: string
 }
 
@@ -34,7 +36,8 @@ export async function writeAuditLog(entry: AuditEntry): Promise<void> {
         action: entry.action,
         previousData: entry.previousData ?? null,
         newData: entry.newData ?? null,
-        userId: entry.userId ?? 'system',
+        userId: entry.userId,
+        branchId: entry.branchId,
         description: entry.description,
       },
     })

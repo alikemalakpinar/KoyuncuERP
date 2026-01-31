@@ -4,6 +4,7 @@ import { AnimatePresence } from 'framer-motion'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import StandardLayout from './layouts/StandardLayout'
 import LoginPage from './pages/LoginPage'
+import BranchSelectorPage from './pages/BranchSelectorPage'
 import Dashboard from './pages/Dashboard'
 import AccountsPage from './pages/AccountsPage'
 import OrdersPage from './pages/OrdersPage'
@@ -65,10 +66,14 @@ function AuthenticatedApp() {
 }
 
 function AppContent() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, needsBranchSelection } = useAuth()
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated && !needsBranchSelection) {
     return <LoginPage />
+  }
+
+  if (needsBranchSelection) {
+    return <BranchSelectorPage />
   }
 
   return <AuthenticatedApp />

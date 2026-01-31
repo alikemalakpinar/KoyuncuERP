@@ -1,21 +1,19 @@
 /**
- * IPC Handlers – Products & Inventory
+ * Products & Inventory IPC Handlers – Branch-Scoped & Protected
+ *
+ * Products/variants are global (shared catalog).
+ * StockMovements and Invoices are branch-scoped.
  */
 
 import type { IpcMain } from 'electron'
-import { getDb } from '../db'
+import { protectedProcedure } from './_secure'
 import { writeAuditLog } from './audit'
 
 export function registerProductHandlers(ipc: IpcMain) {
-  const db = () => {
-    try { return getDb() } catch { return null }
-  }
-
-  // ── Products CRUD ─────────────────────────────────────────
-
-  ipc.handle('products:list', async (_e, filters?: { search?: string; material?: string; collection?: string }) => {
-    const d = db()
-    if (!d) return []
+  // Products are global catalog – all branches can see
+  ipc.handle('products:list', protectedProcedure('read', async (ctx, filters?: {
+    search?: string; material?: string; collection?: string
+  }) => {
     const where: any = { isActive: true }
     if (filters?.material) where.material = filters.material
     if (filters?.collection) where.collection = filters.collection
@@ -25,175 +23,134 @@ export function registerProductHandlers(ipc: IpcMain) {
         { code: { contains: filters.search, mode: 'insensitive' } },
       ]
     }
-    return d.product.findMany({
+    return ctx.prisma.product.findMany({
       where,
-      include: {
-        variants: { include: { stocks: { include: { warehouse: true } } } },
-      },
+      include: { variants: { include: { stocks: { include: { warehouse: true } } } } },
       orderBy: { updatedAt: 'desc' },
     })
-  })
+  }))
 
-  ipc.handle('products:get', async (_e, id: string) => {
-    const d = db()
-    if (!d) return null
-    return d.product.findUnique({
-      where: { id },
+  ipc.handle('products:get', protectedProcedure('read', async (ctx, args: { id: string }) => {
+    return ctx.prisma.product.findUnique({
+      where: { id: args.id },
       include: {
         variants: { include: { stocks: { include: { warehouse: true } } } },
-        stockMovements: { orderBy: { createdAt: 'desc' }, take: 50, include: { warehouse: true, variant: true } },
+        stockMovements: {
+          where: { branchId: ctx.activeBranchId },
+          orderBy: { createdAt: 'desc' }, take: 50,
+          include: { warehouse: true, variant: true },
+        },
       },
     })
-  })
+  }))
 
-  ipc.handle('products:create', async (_e, data: any) => {
-    const d = db()
-    if (!d) return { success: false, error: 'DB not available' }
+  ipc.handle('products:create', protectedProcedure('manage_inventory', async (ctx, data: any) => {
     try {
-      const product = await d.product.create({
+      const product = await ctx.prisma.product.create({
         data: {
-          code: data.code,
-          name: data.name,
+          code: data.code, name: data.name,
           collection: data.collection || null,
           material: data.material || 'WOOL',
           description: data.description || null,
           images: data.images || [],
-          variants: data.variants?.length
-            ? {
-                create: data.variants.map((v: any) => ({
-                  sku: v.sku,
-                  size: v.size,
-                  width: v.width,
-                  length: v.length,
-                  areaM2: (v.width * v.length) / 10000,
-                  color: v.color || null,
-                  barcode: v.barcode || null,
-                  listPrice: v.listPrice,
-                  baseCost: v.baseCost,
-                })),
-              }
-            : undefined,
+          variants: data.variants?.length ? {
+            create: data.variants.map((v: any) => ({
+              sku: v.sku, size: v.size, width: v.width, length: v.length,
+              areaM2: (v.width * v.length) / 10000,
+              color: v.color || null, barcode: v.barcode || null,
+              listPrice: v.listPrice, baseCost: v.baseCost,
+            })),
+          } : undefined,
         },
         include: { variants: true },
       })
-      await writeAuditLog(d as any, {
-        entityType: 'Product',
-        entityId: product.id,
-        action: 'CREATE',
-        newData: product,
+      await writeAuditLog({
+        entityType: 'Product', entityId: product.id, action: 'CREATE',
+        newData: product, userId: ctx.user.id, branchId: ctx.activeBranchId,
         description: `Ürün oluşturuldu: ${product.code} – ${product.name}`,
       })
       return { success: true, data: product }
     } catch (err: any) {
       return { success: false, error: err.message }
     }
-  })
+  }))
 
-  ipc.handle('products:update', async (_e, id: string, data: any) => {
-    const d = db()
-    if (!d) return { success: false, error: 'DB not available' }
+  ipc.handle('products:update', protectedProcedure('manage_inventory', async (ctx, args: {
+    id: string; data: any
+  }) => {
     try {
-      const previous = await d.product.findUnique({ where: { id } })
-      const product = await d.product.update({
-        where: { id },
+      const previous = await ctx.prisma.product.findUnique({ where: { id: args.id } })
+      const product = await ctx.prisma.product.update({
+        where: { id: args.id },
         data: {
-          name: data.name,
-          collection: data.collection,
-          material: data.material,
-          description: data.description,
-          images: data.images,
+          name: args.data.name, collection: args.data.collection,
+          material: args.data.material, description: args.data.description,
+          images: args.data.images,
         },
       })
-      await writeAuditLog(d as any, {
-        entityType: 'Product',
-        entityId: id,
-        action: 'UPDATE',
-        previousData: previous,
-        newData: product,
+      await writeAuditLog({
+        entityType: 'Product', entityId: args.id, action: 'UPDATE',
+        previousData: previous, newData: product,
+        userId: ctx.user.id, branchId: ctx.activeBranchId,
         description: `Ürün güncellendi: ${product.code}`,
       })
       return { success: true, data: product }
     } catch (err: any) {
       return { success: false, error: err.message }
     }
-  })
+  }))
 
-  // ── Inventory / Stock ─────────────────────────────────────
+  ipc.handle('inventory:warehouses', protectedProcedure('read', async (ctx) => {
+    return ctx.prisma.warehouse.findMany({ where: { isActive: true }, orderBy: { code: 'asc' } })
+  }))
 
-  ipc.handle('inventory:warehouses', async () => {
-    const d = db()
-    if (!d) return []
-    return d.warehouse.findMany({ where: { isActive: true }, orderBy: { code: 'asc' } })
-  })
-
-  ipc.handle('inventory:stockByVariant', async (_e, variantId: string) => {
-    const d = db()
-    if (!d) return []
-    return d.stock.findMany({
-      where: { variantId },
+  ipc.handle('inventory:stockByVariant', protectedProcedure('read', async (ctx, args: { variantId: string }) => {
+    return ctx.prisma.stock.findMany({
+      where: { variantId: args.variantId },
       include: { warehouse: true },
     })
-  })
+  }))
 
-  // ── Invoice ───────────────────────────────────────────────
-
-  ipc.handle('invoices:createFromOrder', async (_e, data: { orderId: string }) => {
-    const d = db()
-    if (!d) return { success: false, error: 'DB not available' }
+  ipc.handle('invoices:createFromOrder', protectedProcedure('manage_orders', async (ctx, data: { orderId: string }) => {
     try {
-      const order = await d.order.findUnique({
-        where: { id: data.orderId },
+      const order = await ctx.prisma.order.findFirst({
+        where: { id: data.orderId, branchId: ctx.activeBranchId },
         include: { account: true, items: true },
       })
-      if (!order) return { success: false, error: 'Order not found' }
+      if (!order) return { success: false, error: 'Sipariş bulunamadı' }
 
       const invoiceNo = `INV-${Date.now().toString(36).toUpperCase()}`
-      const invoice = await d.invoice.create({
+      const invoice = await ctx.prisma.invoice.create({
         data: {
-          invoiceNo,
-          orderId: order.id,
+          invoiceNo, orderId: order.id, branchId: ctx.activeBranchId,
           date: new Date(),
           dueDate: order.account?.paymentTermDays
-            ? new Date(Date.now() + order.account.paymentTermDays * 86400000)
-            : null,
-          subtotal: order.totalAmount,
-          taxTotal: order.vatAmount,
-          grandTotal: order.grandTotal,
-          currency: order.currency,
+            ? new Date(Date.now() + order.account.paymentTermDays * 86400000) : null,
+          subtotal: order.totalAmount, taxTotal: order.vatAmount,
+          grandTotal: order.grandTotal, currency: order.currency,
           status: 'FINALIZED',
         },
       })
 
-      // Post SALES ledger entry
       const entryNo = `LE-${Date.now().toString(36).toUpperCase()}`
-      await d.ledgerEntry.create({
+      await ctx.prisma.ledgerEntry.create({
         data: {
-          entryNo,
-          accountId: order.accountId,
-          type: 'INVOICE',
-          debit: order.grandTotal,
-          credit: 0,
-          currency: order.currency,
-          exchangeRate: order.orderExchangeRate,
-          costCenter: 'SALES',
-          description: `Fatura: ${invoiceNo}`,
-          referenceId: order.id,
-          referenceType: 'ORDER',
-          invoiceId: invoice.id,
+          entryNo, accountId: order.accountId, branchId: ctx.activeBranchId,
+          type: 'INVOICE', debit: order.grandTotal, credit: 0,
+          currency: order.currency, exchangeRate: order.orderExchangeRate,
+          costCenter: 'SALES', description: `Fatura: ${invoiceNo}`,
+          referenceId: order.id, referenceType: 'ORDER', invoiceId: invoice.id,
         },
       })
 
-      await writeAuditLog(d as any, {
-        entityType: 'Invoice',
-        entityId: invoice.id,
-        action: 'CREATE',
-        newData: invoice,
-        description: `Fatura oluşturuldu: ${invoiceNo} (Sipariş: ${order.orderNo})`,
+      await writeAuditLog({
+        entityType: 'Invoice', entityId: invoice.id, action: 'CREATE',
+        newData: invoice, userId: ctx.user.id, branchId: ctx.activeBranchId,
+        description: `Fatura: ${invoiceNo} (Sipariş: ${order.orderNo})`,
       })
-
       return { success: true, data: invoice }
     } catch (err: any) {
       return { success: false, error: err.message }
     }
-  })
+  }))
 }
