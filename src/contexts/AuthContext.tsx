@@ -8,7 +8,7 @@
  */
 
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react'
-import { api, setAuthToken, setActiveBranch, getAuthToken } from '../lib/ipc'
+import { api, setAuthToken, setActiveBranch, getAuthToken, hasIpc } from '../lib/ipc'
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -96,6 +96,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const role = activeBranch?.role ?? null
 
   const login = useCallback(async (email: string, password: string): Promise<boolean> => {
+    // Demo fallback when running in browser (no Electron)
+    if (!hasIpc()) {
+      const demoToken = 'demo-token'
+      const demoUser: AuthUser = { id: 'demo-1', email, fullName: 'Demo Kullanıcı' }
+      const demoBranch: AuthBranch = {
+        branchId: 'branch-1',
+        branchName: 'Ana Şube',
+        branchCode: 'HQ',
+        role: 'OWNER',
+      }
+      setToken(demoToken)
+      setAuthToken(demoToken)
+      setUser(demoUser)
+      setBranches([demoBranch])
+      setActiveBranchState(demoBranch)
+      setActiveBranch(demoBranch.branchId)
+      return true
+    }
+
     try {
       const result = await api.login(email, password)
       if (!result.success) return false
