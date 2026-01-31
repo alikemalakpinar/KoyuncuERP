@@ -16,14 +16,25 @@ export default function StandardLayout({ children, onNewOrder, onNewPayment }: P
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // Command palette
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
         setCommandOpen((v) => !v)
       }
+      // New order shortcut
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n' && !e.shiftKey) {
+        e.preventDefault()
+        onNewOrder?.()
+      }
+      // New payment shortcut
+      if ((e.metaKey || e.ctrlKey) && e.key === 'p' && e.shiftKey) {
+        e.preventDefault()
+        onNewPayment?.()
+      }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [])
+  }, [onNewOrder, onNewPayment])
 
   const breadcrumbs = buildBreadcrumbs(location.pathname)
 
@@ -44,7 +55,12 @@ export default function StandardLayout({ children, onNewOrder, onNewPayment }: P
         </main>
       </div>
 
-      <CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} />
+      <CommandPalette
+        open={commandOpen}
+        onClose={() => setCommandOpen(false)}
+        onNewOrder={onNewOrder}
+        onNewPayment={onNewPayment}
+      />
     </div>
   )
 }
@@ -64,6 +80,10 @@ function buildBreadcrumbs(pathname: string): { label: string; href: string }[] {
     '/reports': 'Raporlar',
     '/settings': 'Ayarlar',
     '/activity': 'Aktivite Günlüğü',
+    '/quotations': 'Teklifler',
+    '/shipments': 'Sevkiyat',
+    '/samples': 'Numuneler',
+    '/export-docs': 'İhracat Belgeleri',
   }
 
   if (pathname === '/') {
