@@ -54,7 +54,8 @@ const statusConfig: Record<string, { label: string; color: string; icon: typeof 
 
 export default function OrderDetailPage() {
   const { id } = useParams()
-  const { canViewCost } = useAuth()
+  const { hasPermission } = useAuth()
+  const canViewCost = hasPermission('view_cost_price')
   const order = demoOrder
   const st = statusConfig[order.status]
 
