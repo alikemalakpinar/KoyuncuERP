@@ -19,6 +19,10 @@ import PerformancePage from './pages/PerformancePage'
 import SettingsPage from './pages/SettingsPage'
 import OrderDetailPage from './pages/OrderDetailPage'
 import ActivityLogPage from './pages/ActivityLogPage'
+import QuotationsPage from './pages/QuotationsPage'
+import ShipmentsPage from './pages/ShipmentsPage'
+import SamplesPage from './pages/SamplesPage'
+import ExportDocsPage from './pages/ExportDocsPage'
 import NewOrderModal from './components/modals/NewOrderModal'
 import NewPaymentModal from './components/modals/NewPaymentModal'
 import { ToastProvider } from './components/Toast'
@@ -150,6 +154,10 @@ function AuthenticatedApp() {
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/orders/:id" element={<OrderDetailPage />} />
             <Route path="/activity" element={<ActivityLogPage />} />
+            <Route path="/quotations" element={<QuotationsPage />} />
+            <Route path="/shipments" element={<ShipmentsPage />} />
+            <Route path="/samples" element={<SamplesPage />} />
+            <Route path="/export-docs" element={<ExportDocsPage />} />
           </Routes>
         </AnimatePresence>
       </PageErrorBoundary>

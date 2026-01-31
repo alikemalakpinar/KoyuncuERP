@@ -4,6 +4,7 @@ import {
   LayoutDashboard, Users, ShoppingCart, BookOpen,
   FileText, Settings, BarChart3, Handshake, Package,
   Receipt, TrendingUp, Award, LogOut, Activity, Building2,
+  ClipboardList, Ship, Palette, Stamp,
 } from 'lucide-react'
 import { useAuth, roleLabels, type UserRole } from '../contexts/AuthContext'
 
@@ -22,9 +23,13 @@ export default function Sidebar() {
   const navItems = [
     { to: '/', icon: LayoutDashboard, label: 'Gösterge Paneli', show: true },
     { to: '/accounts', icon: Users, label: 'Cariler', show: role !== 'VIEWER' },
+    { to: '/quotations', icon: ClipboardList, label: 'Teklifler', show: role !== 'VIEWER' },
     { to: '/orders', icon: ShoppingCart, label: 'Siparişler', show: true },
+    { to: '/samples', icon: Palette, label: 'Numuneler', show: role !== 'VIEWER' },
     { to: '/inventory', icon: Package, label: 'Ürün Kataloğu', show: role !== 'VIEWER' },
     { to: '/stock-analysis', icon: TrendingUp, label: 'Stok & Analiz', show: role !== 'VIEWER' },
+    { to: '/shipments', icon: Ship, label: 'Sevkiyat', show: role !== 'VIEWER' },
+    { to: '/export-docs', icon: Stamp, label: 'İhracat Belgeleri', show: role !== 'VIEWER' && role !== 'SALES' },
     { to: '/invoices', icon: Receipt, label: 'Faturalar', show: hasPermission('create_invoice') || hasPermission('view_accounting') },
     { to: '/commissions', icon: Handshake, label: 'Komisyonlar', show: true },
     { to: '/performance', icon: Award, label: 'Performans', show: role !== 'SALES' && role !== 'VIEWER' },

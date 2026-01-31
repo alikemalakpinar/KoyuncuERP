@@ -135,9 +135,9 @@ export default function OrderDetailPage() {
               <p className="text-xs text-gray-500">Satış Elemanı</p>
               <p className="font-medium text-gray-900 dark:text-white text-sm">{order.seller.name}</p>
               <div className="mt-2 pt-2 border-t border-border/50 dark:border-border-dark/50">
-                <p className="text-xs text-gray-500">Acente</p>
+                <p className="text-xs text-gray-500">Müşteriyi Getiren Acente</p>
                 <p className="font-medium text-gray-900 dark:text-white text-sm">{order.agency.name}</p>
-                <p className="text-xs text-gray-500">Çalışan: {order.agencyStaff.name}</p>
+                <p className="text-xs text-gray-500">İlgili Kişi: {order.agencyStaff.name}</p>
                 {canViewCost && (
                   <div className="mt-2 flex gap-3 text-xs">
                     <span className="text-brand-600">Acente: %{order.agency.commission} (${order.agency.commissionAmount.toLocaleString()})</span>
