@@ -12,7 +12,7 @@ import Decimal from 'decimal.js'
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP })
 
-export type DocType = 'ORDER' | 'INVOICE' | 'WAYBILL' | 'LEDGER' | 'COMMISSION' | 'RETURN' | 'PAYMENT' | 'ADJUSTMENT'
+export type DocType = 'ORDER' | 'INVOICE' | 'WAYBILL' | 'LEDGER' | 'COMMISSION' | 'RETURN' | 'PAYMENT' | 'ADJUSTMENT' | 'WORK_ORDER'
 
 const PREFIX_MAP: Record<DocType, string> = {
   ORDER: 'ORD',
@@ -23,6 +23,7 @@ const PREFIX_MAP: Record<DocType, string> = {
   RETURN: 'RET',
   PAYMENT: 'PAY',
   ADJUSTMENT: 'ADJ',
+  WORK_ORDER: 'WO',
 }
 
 const PAD_MAP: Record<DocType, number> = {
@@ -34,6 +35,7 @@ const PAD_MAP: Record<DocType, number> = {
   RETURN: 4,
   PAYMENT: 5,
   ADJUSTMENT: 5,
+  WORK_ORDER: 5,
 }
 
 /**

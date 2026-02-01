@@ -29,6 +29,10 @@ import WaybillsPage from './pages/WaybillsPage'
 import CashBookPage from './pages/CashBookPage'
 import ReturnsPage from './pages/ReturnsPage'
 import StockCountPage from './pages/StockCountPage'
+import PimPage from './pages/PimPage'
+import ChartOfAccountsPage from './pages/ChartOfAccountsPage'
+import CostCentersPage from './pages/CostCentersPage'
+import ManufacturingPage from './pages/ManufacturingPage'
 import NewOrderModal from './components/modals/NewOrderModal'
 import NewPaymentModal from './components/modals/NewPaymentModal'
 import { ToastProvider } from './components/Toast'
@@ -170,6 +174,10 @@ function AuthenticatedApp() {
             <Route path="/cash-book" element={<CashBookPage />} />
             <Route path="/returns" element={<ReturnsPage />} />
             <Route path="/stock-count" element={<StockCountPage />} />
+            <Route path="/pim" element={<PimPage />} />
+            <Route path="/chart-of-accounts" element={<ChartOfAccountsPage />} />
+            <Route path="/cost-centers" element={<CostCentersPage />} />
+            <Route path="/manufacturing" element={<ManufacturingPage />} />
           </Routes>
         </AnimatePresence>
       </PageErrorBoundary>

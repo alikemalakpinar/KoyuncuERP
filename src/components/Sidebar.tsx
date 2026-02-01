@@ -7,6 +7,7 @@ import {
   Receipt, TrendingUp, Award, LogOut, Activity, Building2,
   ClipboardList, Ship, Palette, Stamp, ChevronsLeft, ChevronsRight,
   FileCheck, Truck, Wallet, RotateCcw, ClipboardCheck,
+  Tags, BookOpenCheck, Factory, CircleDollarSign,
 } from 'lucide-react'
 import { useAuth, roleLabels, type UserRole } from '../contexts/AuthContext'
 
@@ -61,6 +62,8 @@ export default function Sidebar() {
         { to: '/export-docs', icon: Stamp, label: 'İhracat Belgeleri', show: role !== 'VIEWER' && role !== 'SALES' },
         { to: '/returns', icon: RotateCcw, label: 'Satış İadeleri', show: role !== 'VIEWER' },
         { to: '/stock-count', icon: ClipboardCheck, label: 'Stok Sayım', show: hasPermission('edit_stock') },
+        { to: '/pim', icon: Tags, label: 'PIM (Ürün Bilgi)', show: role !== 'VIEWER' },
+        { to: '/manufacturing', icon: Factory, label: 'Üretim (MES)', show: role !== 'VIEWER' && role !== 'SALES' },
       ],
     },
     {
@@ -71,6 +74,8 @@ export default function Sidebar() {
         { to: '/cheques', icon: FileCheck, label: 'Çek / Senet', show: hasPermission('view_accounting') },
         { to: '/cash-book', icon: Wallet, label: 'Kasa Defteri', show: hasPermission('view_accounting') },
         { to: '/commissions', icon: Handshake, label: 'Komisyonlar', show: true },
+        { to: '/chart-of-accounts', icon: BookOpenCheck, label: 'Hesap Planı', show: hasPermission('view_accounting') },
+        { to: '/cost-centers', icon: CircleDollarSign, label: 'Maliyet Merkezleri', show: hasPermission('view_accounting') },
         { to: '/accounting', icon: BookOpen, label: 'Muhasebe', show: hasPermission('view_accounting') },
       ],
     },
