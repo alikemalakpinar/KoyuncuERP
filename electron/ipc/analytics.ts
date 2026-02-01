@@ -1,148 +1,229 @@
 /**
  * Analytics IPC Handlers – Branch-Scoped & Protected
+ * All financial aggregations via Decimal.js for precision.
  */
 
 import type { IpcMain } from 'electron'
+import Decimal from 'decimal.js'
 import { protectedProcedure } from './_secure'
 
+Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP })
+
+function sumDecimal(items: any[], key: string): string {
+  return items.reduce(
+    (acc: Decimal, item: any) => acc.plus(new Decimal(String(item[key] ?? 0))),
+    new Decimal(0),
+  ).toFixed(2)
+}
+
 export function registerAnalyticsHandlers(ipcMain: IpcMain) {
+  // DASHBOARD KPIs
   ipcMain.handle('analytics:dashboardKpis', protectedProcedure('view_analytics', async (ctx) => {
     try {
       const now = new Date()
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-      const bi = ctx.activeBranchId
 
-      const invoices = await ctx.prisma.ledgerEntry.findMany({
-        where: { type: 'INVOICE', isCancelled: false, branchId: bi, createdAt: { gte: monthStart } },
+      // Monthly revenue (from ledger debit entries of type INVOICE)
+      const invoiceEntries = await ctx.prisma.ledgerEntry.findMany({
+        where: {
+          branchId: ctx.activeBranchId,
+          type: 'INVOICE',
+          isCancelled: false,
+          createdAt: { gte: monthStart },
+        },
+        select: { debit: true },
       })
-      const monthlyRevenue = invoices.reduce((sum: number, e: any) => sum + parseFloat(String(e.debit)), 0)
+      const monthlyRevenue = sumDecimal(invoiceEntries, 'debit')
 
-      const collections = await ctx.prisma.ledgerEntry.findMany({
-        where: { type: 'COLLECTION', isCancelled: false, branchId: bi, createdAt: { gte: monthStart } },
+      // Monthly collections (from ledger credit entries of type PAYMENT/COLLECTION)
+      const collectionEntries = await ctx.prisma.ledgerEntry.findMany({
+        where: {
+          branchId: ctx.activeBranchId,
+          type: { in: ['PAYMENT', 'COLLECTION'] },
+          isCancelled: false,
+          createdAt: { gte: monthStart },
+        },
+        select: { credit: true },
       })
-      const collectedAmount = collections.reduce((sum: number, e: any) => sum + parseFloat(String(e.credit)), 0)
-      const collectionRate = monthlyRevenue > 0 ? ((collectedAmount / monthlyRevenue) * 100).toFixed(1) : '0'
+      const monthlyCollections = sumDecimal(collectionEntries, 'credit')
 
-      const pendingShipments = await ctx.prisma.order.findMany({
-        where: { status: { in: ['READY', 'PARTIALLY_SHIPPED', 'SHIPPED'] }, isCancelled: false, branchId: bi },
+      // Collection rate
+      const revenueDec = new Decimal(monthlyRevenue)
+      const collectionRate = revenueDec.gt(0)
+        ? new Decimal(monthlyCollections).div(revenueDec).mul(100).toFixed(1)
+        : '0.0'
+
+      // Pending shipments
+      const pendingShipments = await ctx.prisma.order.count({
+        where: {
+          branchId: ctx.activeBranchId,
+          status: { in: ['CONFIRMED', 'IN_PRODUCTION', 'READY'] },
+          isCancelled: false,
+        },
       })
 
-      const overdueAccounts = await ctx.prisma.account.findMany({
-        where: { currentBalance: { gt: 0 }, isActive: true, branchId: bi },
+      // Overdue invoices (past due date, not cancelled, with balance)
+      const overdueInvoices = await ctx.prisma.invoice.findMany({
+        where: {
+          branchId: ctx.activeBranchId,
+          isCancelled: false,
+          dueDate: { lt: now },
+          status: { in: ['FINALIZED', 'SENT'] },
+        },
+        select: { grandTotal: true },
       })
-      const overdueTotal = overdueAccounts.reduce((sum: number, a: any) => sum + parseFloat(String(a.currentBalance)), 0)
+      const overdueAmount = sumDecimal(overdueInvoices, 'grandTotal')
+
+      // Active orders count
+      const activeOrders = await ctx.prisma.order.count({
+        where: { branchId: ctx.activeBranchId, isCancelled: false, status: { not: 'DELIVERED' } },
+      })
+
+      // Cash balance
+      const cashRegisters = await ctx.prisma.cashRegister.findMany({
+        where: { branchId: ctx.activeBranchId },
+        select: { currentBalance: true, name: true },
+      })
+      const totalCash = cashRegisters
+        .reduce((sum: Decimal, r: any) => sum.plus(new Decimal(String(r.currentBalance))), new Decimal(0))
+        .toFixed(2)
+
+      // Critical stock (below min threshold)
+      const criticalStock = await ctx.prisma.stock.count({
+        where: {
+          warehouse: { branch: { id: ctx.activeBranchId } },
+          quantity: { lt: 10 }, // threshold
+        },
+      })
 
       return {
-        monthlyRevenue: monthlyRevenue.toFixed(2), collectionRate,
-        pendingShipments: pendingShipments.length, overdueReceivables: overdueTotal.toFixed(2),
+        monthlyRevenue: `$${Number(monthlyRevenue).toLocaleString()}`,
+        revenueChange: '+0%',
+        collectionRate: `%${collectionRate}`,
+        collectionChange: '+0%',
+        pendingShipments: String(pendingShipments),
+        shipmentNote: `${activeOrders} aktif`,
+        overdueAmount: `$${Number(overdueAmount).toLocaleString()}`,
+        overdueChange: '0%',
+        cashBalance: totalCash,
+        criticalStockCount: criticalStock,
       }
     } catch (error) {
-      return { monthlyRevenue: '0', collectionRate: '0', pendingShipments: 0, overdueReceivables: '0' }
+      console.error('[IPC] analytics:dashboardKpis error:', error)
+      return null
     }
   }))
 
+  // PROFIT ANALYSIS
   ipcMain.handle('analytics:profitAnalysis', protectedProcedure('view_profit', async (ctx) => {
     try {
       const orders = await ctx.prisma.order.findMany({
-        where: { isCancelled: false, branchId: ctx.activeBranchId },
-        include: {
-          account: { select: { name: true } }, items: true,
-          landedCosts: { where: { isCancelled: false } },
-        },
-        orderBy: { createdAt: 'desc' }, take: 50,
+        where: { branchId: ctx.activeBranchId, isCancelled: false, status: 'DELIVERED' },
+        include: { items: true, account: { select: { name: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
       })
 
       return orders.map((order: any) => {
-        const sellingPrice = parseFloat(String(order.grandTotal))
-        const purchaseCost = order.items.reduce(
-          (sum: number, item: any) => sum + parseFloat(String(item.purchasePrice)) * parseFloat(String(item.quantity)), 0)
-        const costsByType: Record<string, number> = {}
-        for (const cost of order.landedCosts) {
-          costsByType[cost.costType] = (costsByType[cost.costType] || 0) + parseFloat(String(cost.amount))
-        }
-        const totalCost = purchaseCost + (costsByType['FREIGHT'] || 0) + (costsByType['CUSTOMS_TAX'] || 0) +
-          (costsByType['WAREHOUSE'] || 0) + (costsByType['INSURANCE'] || 0) + (costsByType['AGENCY_FEE'] || 0) + (costsByType['OTHER'] || 0)
-        const netProfit = sellingPrice - totalCost
-        const netMargin = sellingPrice > 0 ? (netProfit / sellingPrice) * 100 : 0
+        const revenue = new Decimal(String(order.grandTotal))
+        const costs = order.items.reduce((sum: Decimal, item: any) => {
+          const qty = new Decimal(String(item.quantity))
+          const cost = new Decimal(String(item.purchasePrice ?? '0'))
+          return sum.plus(qty.mul(cost))
+        }, new Decimal(0))
+        const profit = revenue.minus(costs)
+        const margin = revenue.gt(0) ? profit.div(revenue).mul(100).toFixed(1) : '0.0'
 
         return {
-          orderId: order.id, orderNo: order.orderNo, customer: order.account.name,
-          status: order.status, sellingPrice: sellingPrice.toFixed(2),
-          purchaseCost: purchaseCost.toFixed(2), freight: (costsByType['FREIGHT'] || 0).toFixed(2),
-          customs: (costsByType['CUSTOMS_TAX'] || 0).toFixed(2), warehouse: (costsByType['WAREHOUSE'] || 0).toFixed(2),
-          insurance: (costsByType['INSURANCE'] || 0).toFixed(2), agencyFee: (costsByType['AGENCY_FEE'] || 0).toFixed(2),
-          totalCost: totalCost.toFixed(2), netProfit: netProfit.toFixed(2), netMargin: netMargin.toFixed(1),
+          orderId: order.id,
+          orderNo: order.orderNo,
+          accountName: order.account?.name ?? '',
+          date: order.createdAt,
+          revenue: revenue.toFixed(2),
+          costs: costs.toFixed(2),
+          profit: profit.toFixed(2),
+          margin,
+          currency: order.currency,
         }
       })
-    } catch { return [] }
+    } catch (error) {
+      console.error('[IPC] analytics:profitAnalysis error:', error)
+      return []
+    }
   }))
 
+  // AGENCY PERFORMANCE
   ipcMain.handle('analytics:agencyPerformance', protectedProcedure('view_analytics', async (ctx) => {
     try {
-      const records = await ctx.prisma.commissionRecord.findMany({
-        where: { isCancelled: false, branchId: ctx.activeBranchId },
+      const commissions = await ctx.prisma.commissionRecord.findMany({
+        where: { branchId: ctx.activeBranchId, isCancelled: false },
         include: {
           agency: { include: { account: { select: { name: true } } } },
-          order: { select: { grandTotal: true } },
+          agencyStaff: { select: { name: true } },
+          order: { select: { orderNo: true, grandTotal: true, currency: true } },
         },
+        orderBy: { createdAt: 'desc' },
       })
 
-      const byAgency = new Map<string, any>()
-      for (const rec of records) {
-        const existing = byAgency.get(rec.agencyId) || {
-          name: rec.agency.account.name, region: rec.agency.region || '',
-          totalSales: 0, commission: 0, pendingCommission: 0, orderCount: 0,
-          commissionRate: parseFloat(String(rec.commissionRate)),
-        }
-        existing.totalSales += parseFloat(String(rec.baseAmount))
-        existing.commission += parseFloat(String(rec.commissionAmount))
-        if (rec.status === 'PENDING') existing.pendingCommission += parseFloat(String(rec.commissionAmount))
-        existing.orderCount++
-        byAgency.set(rec.agencyId, existing)
-      }
-
-      return Array.from(byAgency.entries()).map(([id, d]) => ({
-        id, ...d, totalSales: d.totalSales.toFixed(2), commission: d.commission.toFixed(2),
-        pendingCommission: d.pendingCommission.toFixed(2), commissionRate: d.commissionRate.toFixed(1),
+      return commissions.map((c: any) => ({
+        id: c.id,
+        agencyName: c.agency?.account?.name ?? '',
+        staffName: c.agencyStaff?.name ?? '',
+        orderNo: c.order?.orderNo ?? '',
+        baseAmount: new Decimal(String(c.baseAmount)).toFixed(2),
+        commissionRate: new Decimal(String(c.commissionRate)).toFixed(2),
+        commissionAmount: new Decimal(String(c.commissionAmount)).toFixed(2),
+        currency: c.order?.currency ?? 'USD',
+        date: c.createdAt,
       }))
-    } catch { return [] }
+    } catch (error) {
+      console.error('[IPC] analytics:agencyPerformance error:', error)
+      return []
+    }
   }))
 
+  // ACCOUNT HEALTH
   ipcMain.handle('analytics:accountHealth', protectedProcedure('read', async (ctx, args: { accountId: string }) => {
     try {
-      const now = new Date()
-      const yearAgo = new Date(now.getFullYear() - 1, now.getMonth(), 1)
-
-      // Verify account belongs to branch
       const account = await ctx.prisma.account.findFirst({
         where: { id: args.accountId, branchId: ctx.activeBranchId },
       })
       if (!account) return null
 
-      const entries = await ctx.prisma.ledgerEntry.findMany({
-        where: { accountId: args.accountId, branchId: ctx.activeBranchId, type: 'INVOICE', isCancelled: false, createdAt: { gte: yearAgo } },
-        orderBy: { createdAt: 'asc' },
+      const overdueInvoices = await ctx.prisma.invoice.findMany({
+        where: {
+          order: { accountId: args.accountId },
+          branchId: ctx.activeBranchId,
+          isCancelled: false,
+          dueDate: { lt: new Date() },
+          status: { in: ['FINALIZED', 'SENT'] },
+        },
+        select: { grandTotal: true },
+      })
+      const overdueTotal = sumDecimal(overdueInvoices, 'grandTotal')
+
+      const orderCount = await ctx.prisma.order.count({
+        where: { accountId: args.accountId, branchId: ctx.activeBranchId, isCancelled: false },
       })
 
-      const months = ['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara']
-      const monthlyRevenue = months.map((month, idx) => {
-        const amount = entries.filter((e: any) => new Date(e.createdAt).getMonth() === idx)
-          .reduce((sum: number, e: any) => sum + parseFloat(String(e.debit)), 0)
-        return { month, amount: amount.toFixed(2) }
-      })
-
-      const totalRevenue = entries.reduce((sum: number, e: any) => sum + parseFloat(String(e.debit)), 0)
-      const balance = parseFloat(String(account.currentBalance))
-      const riskLimit = parseFloat(String(account.riskLimit))
-      const balanceRatio = riskLimit > 0 ? balance / riskLimit : 0
-      const riskScore = Math.max(0, Math.min(100, Math.round((1 - balanceRatio) * 100)))
+      const balance = new Decimal(String(account.currentBalance))
+      const riskLimit = new Decimal(String(account.riskLimit))
+      const riskPct = riskLimit.gt(0)
+        ? balance.div(riskLimit).mul(100).toFixed(1)
+        : '0.0'
 
       return {
-        accountId: args.accountId, totalRevenue12m: totalRevenue.toFixed(2),
-        avgPaymentDays: account.paymentTermDays ?? 30,
-        overdueAmount: balance > 0 ? balance.toFixed(2) : '0',
-        riskScore, monthlyRevenue,
+        balance: balance.toFixed(2),
+        riskLimit: riskLimit.toFixed(2),
+        riskPct,
+        overdueTotal,
+        overdueCount: overdueInvoices.length,
+        orderCount,
+        isRiskHigh: new Decimal(riskPct).gt(80),
       }
-    } catch { return null }
+    } catch (error) {
+      console.error('[IPC] analytics:accountHealth error:', error)
+      return null
+    }
   }))
 }

@@ -1,136 +1,348 @@
 /**
  * Inventory Service – FIFO Lot-Based Stock Management
- * Updated to support branchId on lots and transactions.
+ * All math via Decimal.js. $transaction used for all writes.
+ * Schema models: Stock, StockMovement, InventoryLot, InventoryTransaction
  */
 
+import Decimal from 'decimal.js'
 import type { PrismaClient } from '@prisma/client'
 
-function toFixed2(n: number): string { return n.toFixed(2) }
+Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP })
 
-function generateBatchNo(): string {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const seq = Date.now().toString(36).toUpperCase().slice(-6)
-  return `LOT-${y}${m}-${seq}`
+type DbClient = PrismaClient
+
+export interface StockInInput {
+  variantId: string; warehouseId: string; branchId: string
+  quantity: string; unitCost: string; referenceId?: string; referenceType?: string; notes?: string
 }
 
-export interface ReceiveLotInput {
-  productId: string; variantId: string; warehouseId: string
-  quantity: string; unitCost: string; batchNo?: string; branchId?: string
-}
-
-export interface AllocateInput {
-  variantId: string; warehouseId: string; quantity: string; orderId: string
-}
-
-export interface FulfillInput {
-  variantId: string; warehouseId: string; quantity: string; orderId: string; orderNo: string
-}
-
-export interface FulfillmentResult {
-  totalCogs: string
-  lotsConsumed: { lotId: string; batchNo: string; quantity: string; unitCost: string; lineCost: string }[]
+export interface StockOutInput {
+  variantId: string; warehouseId: string; branchId: string
+  quantity: string; referenceId?: string; referenceType?: string; notes?: string
 }
 
 export class InventoryService {
-  constructor(private db: PrismaClient) {}
+  constructor(private db: DbClient) {}
 
-  async receiveLot(input: ReceiveLotInput) {
-    const qty = parseFloat(input.quantity)
-    const cost = parseFloat(input.unitCost)
-    const batchNo = input.batchNo || generateBatchNo()
-
+  /** Stock In – Creates lot, updates stock quantity */
+  async stockIn(input: StockInInput) {
     return this.db.$transaction(async (tx: any) => {
-      const lot = await tx.inventoryLot.create({
+      const qty = new Decimal(input.quantity)
+      const cost = new Decimal(input.unitCost)
+      if (qty.lte(0)) throw new Error('Miktar pozitif olmalı')
+      if (cost.lt(0)) throw new Error('Maliyet negatif olamaz')
+
+      // Get variant to find productId
+      const variant = await tx.productVariant.findUnique({
+        where: { id: input.variantId },
+        select: { productId: true },
+      })
+      if (!variant) throw new Error('Ürün varyantı bulunamadı')
+
+      // Create lot
+      const batchNo = `LOT-${Date.now().toString(36).toUpperCase()}`
+      await tx.inventoryLot.create({
         data: {
-          productId: input.productId, variantId: input.variantId,
-          warehouseId: input.warehouseId, branchId: input.branchId!,
-          batchNo, quantity: input.quantity, remainingQuantity: input.quantity,
-          unitCost: input.unitCost,
+          productId: variant.productId,
+          variantId: input.variantId,
+          warehouseId: input.warehouseId,
+          branchId: input.branchId,
+          batchNo,
+          quantity: qty.toFixed(2),
+          remainingQuantity: qty.toFixed(2),
+          unitCost: cost.toFixed(2),
+        },
+      })
+
+      // Upsert stock
+      const existing = await tx.stock.findFirst({
+        where: { variantId: input.variantId, warehouseId: input.warehouseId },
+      })
+      if (existing) {
+        const newQty = new Decimal(String(existing.quantity)).plus(qty)
+        await tx.stock.update({
+          where: { id: existing.id },
+          data: { quantity: Math.round(newQty.toNumber()) },
+        })
+      } else {
+        await tx.stock.create({
+          data: {
+            variantId: input.variantId, warehouseId: input.warehouseId,
+            quantity: Math.round(qty.toNumber()), reservedQuantity: 0,
+          },
+        })
+      }
+
+      // Record movement
+      await tx.stockMovement.create({
+        data: {
+          variantId: input.variantId,
+          warehouseId: input.warehouseId,
+          productId: variant.productId,
+          branchId: input.branchId,
+          type: 'IN',
+          quantity: Math.round(qty.toNumber()),
+          referenceId: input.referenceId,
+          referenceType: input.referenceType,
+          description: input.notes,
+        },
+      })
+
+      // Transaction record
+      await tx.inventoryTransaction.create({
+        data: {
+          variantId: input.variantId,
+          warehouseId: input.warehouseId,
+          branchId: input.branchId,
+          type: 'PURCHASE',
+          quantity: qty.toFixed(2),
+          unitCost: cost.toFixed(2),
+          totalCost: qty.mul(cost).toFixed(2),
+          referenceId: input.referenceId,
+          referenceType: input.referenceType,
+        },
+      })
+
+      return { success: true, quantityAdded: qty.toFixed(2) }
+    })
+  }
+
+  /** Stock Out – FIFO lot depletion, Decimal.js for COGS */
+  async stockOut(input: StockOutInput) {
+    return this.db.$transaction(async (tx: any) => {
+      const qty = new Decimal(input.quantity)
+      if (qty.lte(0)) throw new Error('Miktar pozitif olmalı')
+
+      const variant = await tx.productVariant.findUnique({
+        where: { id: input.variantId },
+        select: { productId: true },
+      })
+      if (!variant) throw new Error('Ürün varyantı bulunamadı')
+
+      // Get available lots (FIFO)
+      const lots = await tx.inventoryLot.findMany({
+        where: {
+          variantId: input.variantId, warehouseId: input.warehouseId,
+          remainingQuantity: { gt: 0 },
+        },
+        orderBy: { createdAt: 'asc' },
+      })
+
+      const totalAvailable = lots.reduce(
+        (sum: Decimal, lot: any) => sum.plus(new Decimal(String(lot.remainingQuantity))),
+        new Decimal(0),
+      )
+
+      if (totalAvailable.lt(qty)) {
+        throw new Error(`Yetersiz stok. Mevcut: ${totalAvailable.toFixed(2)}, İstenen: ${qty.toFixed(2)}`)
+      }
+
+      // FIFO depletion
+      let remaining = qty
+      let totalCogs = new Decimal(0)
+
+      for (const lot of lots) {
+        if (remaining.lte(0)) break
+        const lotRemaining = new Decimal(String(lot.remainingQuantity))
+        const take = Decimal.min(remaining, lotRemaining)
+        const unitCost = new Decimal(String(lot.unitCost))
+        const lineCost = take.mul(unitCost)
+
+        totalCogs = totalCogs.plus(lineCost)
+        remaining = remaining.minus(take)
+
+        await tx.inventoryLot.update({
+          where: { id: lot.id },
+          data: { remainingQuantity: lotRemaining.minus(take).toFixed(2) },
+        })
+      }
+
+      // Update stock quantity
+      const stock = await tx.stock.findFirst({
+        where: { variantId: input.variantId, warehouseId: input.warehouseId },
+      })
+      if (stock) {
+        const newQty = Math.max(0, new Decimal(String(stock.quantity)).minus(qty).toNumber())
+        await tx.stock.update({
+          where: { id: stock.id },
+          data: { quantity: Math.round(newQty) },
+        })
+      }
+
+      // Movement
+      await tx.stockMovement.create({
+        data: {
+          variantId: input.variantId,
+          warehouseId: input.warehouseId,
+          productId: variant.productId,
+          branchId: input.branchId,
+          type: 'OUT',
+          quantity: Math.round(qty.toNumber()),
+          referenceId: input.referenceId,
+          referenceType: input.referenceType,
+          description: input.notes,
+        },
+      })
+
+      // Transaction record with COGS
+      await tx.inventoryTransaction.create({
+        data: {
+          variantId: input.variantId,
+          warehouseId: input.warehouseId,
+          branchId: input.branchId,
+          type: 'SALE',
+          quantity: qty.toFixed(2),
+          unitCost: qty.gt(0) ? totalCogs.div(qty).toFixed(2) : '0.00',
+          totalCost: totalCogs.toFixed(2),
+          referenceId: input.referenceId,
+          referenceType: input.referenceType,
+        },
+      })
+
+      return { success: true, cogs: totalCogs.toFixed(2) }
+    })
+  }
+
+  /** Reserve stock for an order (does NOT reduce physical quantity) */
+  async reserveStock(variantId: string, warehouseId: string, branchId: string, quantity: string) {
+    return this.db.$transaction(async (tx: any) => {
+      const qty = new Decimal(quantity)
+      if (qty.lte(0)) throw new Error('Miktar pozitif olmalı')
+
+      const variant = await tx.productVariant.findUnique({
+        where: { id: variantId },
+        select: { productId: true },
+      })
+      if (!variant) throw new Error('Ürün varyantı bulunamadı')
+
+      const stock = await tx.stock.findFirst({
+        where: { variantId, warehouseId },
+      })
+      if (!stock) throw new Error('Stok kaydı bulunamadı')
+
+      const available = new Decimal(String(stock.quantity)).minus(new Decimal(String(stock.reservedQuantity)))
+      if (available.lt(qty)) {
+        throw new Error(`Yetersiz stok. Kullanılabilir: ${available.toFixed(2)}, İstenen: ${qty.toFixed(2)}`)
+      }
+
+      const newReserved = new Decimal(String(stock.reservedQuantity)).plus(qty)
+      await tx.stock.update({
+        where: { id: stock.id },
+        data: { reservedQuantity: Math.round(newReserved.toNumber()) },
+      })
+
+      await tx.stockMovement.create({
+        data: {
+          variantId, warehouseId,
+          productId: variant.productId,
+          branchId,
+          type: 'RESERVE',
+          quantity: Math.round(qty.toNumber()),
+          description: 'Sipariş rezervasyonu',
+        },
+      })
+
+      return { success: true }
+    })
+  }
+
+  /** Release reserved stock */
+  async releaseStock(variantId: string, warehouseId: string, branchId: string, quantity: string) {
+    return this.db.$transaction(async (tx: any) => {
+      const qty = new Decimal(quantity)
+      if (qty.lte(0)) throw new Error('Miktar pozitif olmalı')
+
+      const variant = await tx.productVariant.findUnique({
+        where: { id: variantId },
+        select: { productId: true },
+      })
+      if (!variant) throw new Error('Ürün varyantı bulunamadı')
+
+      const stock = await tx.stock.findFirst({
+        where: { variantId, warehouseId },
+      })
+      if (!stock) throw new Error('Stok kaydı bulunamadı')
+
+      const newReserved = Decimal.max(
+        new Decimal(0),
+        new Decimal(String(stock.reservedQuantity)).minus(qty),
+      )
+      await tx.stock.update({
+        where: { id: stock.id },
+        data: { reservedQuantity: Math.round(newReserved.toNumber()) },
+      })
+
+      await tx.stockMovement.create({
+        data: {
+          variantId, warehouseId,
+          productId: variant.productId,
+          branchId,
+          type: 'UNRESERVE',
+          quantity: Math.round(qty.toNumber()),
+          description: 'Rezervasyon iptali',
+        },
+      })
+
+      return { success: true }
+    })
+  }
+
+  /** Stock adjustment – for physical count differences */
+  async adjustStock(input: {
+    variantId: string; warehouseId: string; branchId: string
+    newQuantity: string; reason: string; userId: string
+  }) {
+    return this.db.$transaction(async (tx: any) => {
+      const newQty = new Decimal(input.newQuantity)
+      if (newQty.lt(0)) throw new Error('Miktar negatif olamaz')
+
+      const variant = await tx.productVariant.findUnique({
+        where: { id: input.variantId },
+        select: { productId: true },
+      })
+      if (!variant) throw new Error('Ürün varyantı bulunamadı')
+
+      const stock = await tx.stock.findFirst({
+        where: { variantId: input.variantId, warehouseId: input.warehouseId },
+      })
+      if (!stock) throw new Error('Stok kaydı bulunamadı')
+
+      const oldQty = new Decimal(String(stock.quantity))
+      const diff = newQty.minus(oldQty)
+
+      if (diff.isZero()) return { success: true, adjustment: '0', oldQty: oldQty.toFixed(0), newQty: newQty.toFixed(0) }
+
+      await tx.stock.update({
+        where: { id: stock.id },
+        data: { quantity: Math.round(newQty.toNumber()) },
+      })
+
+      await tx.stockMovement.create({
+        data: {
+          variantId: input.variantId,
+          warehouseId: input.warehouseId,
+          productId: variant.productId,
+          branchId: input.branchId,
+          type: 'ADJUSTMENT',
+          quantity: Math.round(diff.abs().toNumber()),
+          description: `Stok düzeltme: ${oldQty.toFixed(0)} → ${newQty.toFixed(0)} (${input.reason})`,
         },
       })
 
       await tx.inventoryTransaction.create({
         data: {
-          type: 'PURCHASE', variantId: input.variantId,
-          warehouseId: input.warehouseId, branchId: input.branchId!,
-          lotId: lot.id, quantity: input.quantity, unitCost: input.unitCost,
-          totalCost: toFixed2(qty * cost), referenceId: lot.id, referenceType: 'LOT',
-          description: `Lot girişi: ${batchNo} (${qty} adet @ $${input.unitCost})`,
+          variantId: input.variantId,
+          warehouseId: input.warehouseId,
+          branchId: input.branchId,
+          type: 'ADJUSTMENT',
+          quantity: diff.abs().toFixed(2),
+          unitCost: '0.00',
+          totalCost: '0.00',
+          referenceType: 'ADJUSTMENT',
         },
       })
 
-      await tx.stock.upsert({
-        where: { variantId_warehouseId: { variantId: input.variantId, warehouseId: input.warehouseId } },
-        update: { quantity: { increment: qty } },
-        create: { variantId: input.variantId, warehouseId: input.warehouseId, quantity: qty, reservedQuantity: 0 },
-      })
-
-      return { success: true, data: lot }
-    })
-  }
-
-  async allocate(input: AllocateInput) {
-    const qty = parseFloat(input.quantity)
-    return this.db.$transaction(async (tx: any) => {
-      const stock = await tx.stock.findUnique({
-        where: { variantId_warehouseId: { variantId: input.variantId, warehouseId: input.warehouseId } },
-      })
-      if (!stock) return { success: false, error: 'Bu depoda stok bulunamadı' }
-      const available = stock.quantity - stock.reservedQuantity
-      if (available < qty) return { success: false, error: `Yetersiz stok. Mevcut: ${available}, İstenen: ${qty}` }
-
-      await tx.stock.update({ where: { id: stock.id }, data: { reservedQuantity: { increment: qty } } })
-      return { success: true, data: { reserved: qty } }
-    })
-  }
-
-  async fulfillFifo(input: FulfillInput): Promise<{ success: boolean; data?: FulfillmentResult; error?: string }> {
-    const qtyNeeded = parseFloat(input.quantity)
-    return this.db.$transaction(async (tx: any) => {
-      const lots = await tx.inventoryLot.findMany({
-        where: { variantId: input.variantId, warehouseId: input.warehouseId, remainingQuantity: { gt: 0 } },
-        orderBy: { receivedDate: 'asc' },
-      })
-
-      let remaining = qtyNeeded, totalCogs = 0
-      const consumed: FulfillmentResult['lotsConsumed'] = []
-
-      for (const lot of lots) {
-        if (remaining <= 0) break
-        const lotRemaining = parseFloat(String(lot.remainingQuantity))
-        const take = Math.min(remaining, lotRemaining)
-        const unitCost = parseFloat(String(lot.unitCost))
-        const lineCost = take * unitCost
-
-        await tx.inventoryLot.update({ where: { id: lot.id }, data: { remainingQuantity: { decrement: take } } })
-        consumed.push({ lotId: lot.id, batchNo: lot.batchNo, quantity: toFixed2(take), unitCost: toFixed2(unitCost), lineCost: toFixed2(lineCost) })
-        totalCogs += lineCost
-        remaining -= take
-      }
-
-      if (remaining > 0) return { success: false, error: `FIFO: ${toFixed2(remaining)} adet karşılanamadı` }
-
-      await tx.stock.update({
-        where: { variantId_warehouseId: { variantId: input.variantId, warehouseId: input.warehouseId } },
-        data: { quantity: { decrement: qtyNeeded }, reservedQuantity: { decrement: qtyNeeded } },
-      })
-
-      return { success: true, data: { totalCogs: toFixed2(totalCogs), lotsConsumed: consumed } }
-    })
-  }
-
-  async getLots(variantId: string, warehouseId?: string) {
-    const where: any = { variantId, remainingQuantity: { gt: 0 } }
-    if (warehouseId) where.warehouseId = warehouseId
-    return this.db.inventoryLot.findMany({ where, orderBy: { receivedDate: 'asc' }, include: { warehouse: true } })
-  }
-
-  async getTransactions(variantId: string, limit = 50) {
-    return this.db.inventoryTransaction.findMany({
-      where: { variantId }, orderBy: { createdAt: 'desc' }, take: limit,
-      include: { lot: true, warehouse: true },
+      return { success: true, adjustment: diff.toFixed(2), oldQty: oldQty.toFixed(0), newQty: newQty.toFixed(0) }
     })
   }
 }

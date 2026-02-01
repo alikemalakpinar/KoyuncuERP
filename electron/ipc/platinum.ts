@@ -13,15 +13,14 @@ import { FinanceService } from '../services/finance'
 export function registerPlatinumHandlers(ipcMain: IpcMain) {
   // ═══ INVENTORY – FIFO Lot Management ═══
 
-  ipcMain.handle('inventory:receiveLot', protectedProcedure('manage_inventory', async (ctx, data: {
-    productId: string; variantId: string; warehouseId: string
-    quantity: string; unitCost: string; batchNo?: string
+  ipcMain.handle('inventory:stockIn', protectedProcedure('manage_inventory', async (ctx, data: {
+    variantId: string; warehouseId: string; quantity: string; unitCost: string
   }) => {
     try {
       const svc = new InventoryService(ctx.prisma)
-      const result = await svc.receiveLot({ ...data, branchId: ctx.activeBranchId })
+      const result = await svc.stockIn({ ...data, branchId: ctx.activeBranchId })
       await writeAuditLog({
-        entityType: 'InventoryLot', entityId: result.data?.id ?? '',
+        entityType: 'InventoryLot', entityId: data.variantId,
         action: 'CREATE', newData: data,
         userId: ctx.user.id, branchId: ctx.activeBranchId,
         description: `Lot girişi: ${data.quantity} adet @ $${data.unitCost}`,
@@ -32,34 +31,53 @@ export function registerPlatinumHandlers(ipcMain: IpcMain) {
     }
   }))
 
-  ipcMain.handle('inventory:allocate', protectedProcedure('manage_inventory', async (ctx, data: {
-    variantId: string; warehouseId: string; quantity: string; orderId: string
+  ipcMain.handle('inventory:stockOut', protectedProcedure('manage_inventory', async (ctx, data: {
+    variantId: string; warehouseId: string; quantity: string; referenceId?: string; referenceType?: string
   }) => {
     try {
       const svc = new InventoryService(ctx.prisma)
-      return await svc.allocate(data)
+      return await svc.stockOut({ ...data, branchId: ctx.activeBranchId })
     } catch (error: any) {
       return { success: false, error: error.message }
     }
   }))
 
-  ipcMain.handle('inventory:fulfill', protectedProcedure('manage_inventory', async (ctx, data: {
-    variantId: string; warehouseId: string; quantity: string; orderId: string; orderNo: string
+  ipcMain.handle('inventory:reserve', protectedProcedure('manage_inventory', async (ctx, data: {
+    variantId: string; warehouseId: string; quantity: string
   }) => {
     try {
       const svc = new InventoryService(ctx.prisma)
-      const result = await svc.fulfillFifo(data)
-      if (result.success && result.data) {
-        const entryNo = `COGS-${Date.now().toString(36).toUpperCase()}`
-        await ctx.prisma.ledgerEntry.create({
-          data: {
-            entryNo, accountId: data.orderId, // will be resolved
-            branchId: ctx.activeBranchId, type: 'ADJUSTMENT',
-            debit: result.data.totalCogs, credit: '0',
-            currency: 'USD', exchangeRate: '1', costCenter: 'COGS',
-            description: `SMM kaydı – ${data.orderNo}: $${result.data.totalCogs}`,
-            referenceId: data.orderId, referenceType: 'ORDER_COGS',
-          },
+      return await svc.reserveStock(data.variantId, data.warehouseId, ctx.activeBranchId, data.quantity)
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  }))
+
+  ipcMain.handle('inventory:release', protectedProcedure('manage_inventory', async (ctx, data: {
+    variantId: string; warehouseId: string; quantity: string
+  }) => {
+    try {
+      const svc = new InventoryService(ctx.prisma)
+      return await svc.releaseStock(data.variantId, data.warehouseId, ctx.activeBranchId, data.quantity)
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  }))
+
+  ipcMain.handle('inventory:adjust', protectedProcedure('manage_inventory', async (ctx, data: {
+    variantId: string; warehouseId: string; newQuantity: string; reason: string
+  }) => {
+    try {
+      const svc = new InventoryService(ctx.prisma)
+      const result = await svc.adjustStock({
+        ...data, branchId: ctx.activeBranchId, userId: ctx.user.id,
+      })
+      if (result.success) {
+        await writeAuditLog({
+          entityType: 'Stock', entityId: data.variantId,
+          action: 'ADJUST', newData: data,
+          userId: ctx.user.id, branchId: ctx.activeBranchId,
+          description: `Stok düzeltme: ${result.oldQty} → ${result.newQty} (${data.reason})`,
         })
       }
       return result
@@ -108,24 +126,15 @@ export function registerPlatinumHandlers(ipcMain: IpcMain) {
     }
   }))
 
-  ipcMain.handle('pricing:resolveBatch', protectedProcedure('read', async (ctx, data: {
-    accountId: string; variants: { variantId: string; quantity: string }[]
-  }) => {
-    try {
-      const svc = new PricingService(ctx.prisma)
-      return await svc.resolvePrices(data.accountId, data.variants)
-    } catch { return [] }
-  }))
-
   ipcMain.handle('pricing:lists', protectedProcedure('read', async (ctx) => {
     try {
       const svc = new PricingService(ctx.prisma)
-      return await svc.listPriceLists()
+      return await svc.getPriceLists()
     } catch { return [] }
   }))
 
   ipcMain.handle('pricing:createList', protectedProcedure('manage_settings', async (ctx, data: {
-    name: string; currency: string; isDefault?: boolean
+    name: string; code: string; currency: string; isDefault?: boolean
   }) => {
     try {
       const svc = new PricingService(ctx.prisma)
@@ -152,7 +161,6 @@ export function registerPlatinumHandlers(ipcMain: IpcMain) {
     accountId: string; priceListId: string
   }) => {
     try {
-      // Verify account belongs to branch
       const acc = await ctx.prisma.account.findFirst({
         where: { id: args.accountId, branchId: ctx.activeBranchId },
       })

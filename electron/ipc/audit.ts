@@ -14,6 +14,8 @@ export type AuditAction =
   | 'STATUS_CHANGE'
   | 'CANCEL'
   | 'REVERSAL'
+  | 'CLOSE'
+  | 'ADJUST'
 
 export interface AuditEntry {
   entityType: string
