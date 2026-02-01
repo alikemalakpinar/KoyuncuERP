@@ -28,6 +28,7 @@ import ChequesPage from './pages/ChequesPage'
 import WaybillsPage from './pages/WaybillsPage'
 import CashBookPage from './pages/CashBookPage'
 import ReturnsPage from './pages/ReturnsPage'
+import StockCountPage from './pages/StockCountPage'
 import NewOrderModal from './components/modals/NewOrderModal'
 import NewPaymentModal from './components/modals/NewPaymentModal'
 import { ToastProvider } from './components/Toast'
@@ -168,6 +169,7 @@ function AuthenticatedApp() {
             <Route path="/waybills" element={<WaybillsPage />} />
             <Route path="/cash-book" element={<CashBookPage />} />
             <Route path="/returns" element={<ReturnsPage />} />
+            <Route path="/stock-count" element={<StockCountPage />} />
           </Routes>
         </AnimatePresence>
       </PageErrorBoundary>

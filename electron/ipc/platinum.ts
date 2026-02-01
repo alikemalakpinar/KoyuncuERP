@@ -86,6 +86,26 @@ export function registerPlatinumHandlers(ipcMain: IpcMain) {
     }
   }))
 
+  // LIST ALL STOCKS (for stock count page)
+  ipcMain.handle('inventory:stocks', protectedProcedure('read', async (ctx, args?: {
+    warehouseId?: string
+  }) => {
+    try {
+      const where: any = {}
+      if (args?.warehouseId) where.warehouseId = args.warehouseId
+      return ctx.prisma.stock.findMany({
+        where,
+        orderBy: { updatedAt: 'desc' },
+        include: {
+          variant: {
+            select: { id: true, sku: true, size: true, color: true, product: { select: { name: true } } },
+          },
+          warehouse: { select: { id: true, name: true } },
+        },
+      })
+    } catch { return [] }
+  }))
+
   ipcMain.handle('inventory:lots', protectedProcedure('read', async (ctx, args: {
     variantId: string; warehouseId?: string
   }) => {

@@ -1,64 +1,53 @@
 /**
  * Invoice IPC Handlers – Branch-Scoped & Protected
  *
- * invoices:createFromOrder — Creates an invoice from an existing order
- * and ONLY at this stage creates the LedgerEntry (debit/credit).
- *
- * All financial math via Decimal.js, wrapped in $transaction.
+ * - Proper invoice creation from orders with Decimal.js
+ * - LedgerEntry ONLY created at invoice stage (not order)
+ * - Account balance updated atomically
+ * - $transaction for all multi-table writes
+ * - Zod validation on inputs
  */
 
 import type { IpcMain } from 'electron'
 import Decimal from 'decimal.js'
+import { z } from 'zod'
 import { protectedProcedure } from './_secure'
 import { writeAuditLog } from './audit'
+import { nextDocumentNo } from '../services/sequence'
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP })
 
-// ─── Atomic Sequence (shared pattern with orders.ts) ────────
-async function nextSequenceValue(tx: any, key: string): Promise<number> {
-  const result = await tx.$queryRaw`
-    INSERT INTO sequences (id, key, value)
-    VALUES (gen_random_uuid(), ${key}, 1)
-    ON CONFLICT (key)
-    DO UPDATE SET value = sequences.value + 1
-    RETURNING value
-  ` as { value: number }[]
-  return result[0].value
-}
+// ─── Validation ─────────────────────────────────────────────
+const createFromOrderSchema = z.object({
+  orderId: z.string().min(1, 'Sipariş ID gerekli'),
+  dueDate: z.string().optional(),
+  notes: z.string().optional(),
+})
 
-async function generateInvoiceNo(tx: any): Promise<string> {
-  const year = new Date().getFullYear()
-  const seq = await nextSequenceValue(tx, `invoice-${year}`)
-  return `INV-${year}-${String(seq).padStart(5, '0')}`
-}
+const finalizeSchema = z.object({ id: z.string().min(1) })
 
-async function generateEntryNo(tx: any, prefix = 'LED'): Promise<string> {
-  const year = new Date().getFullYear()
-  const seq = await nextSequenceValue(tx, `${prefix.toLowerCase()}-${year}`)
-  return `${prefix}-${year}-${String(seq).padStart(5, '0')}`
-}
+const cancelSchema = z.object({
+  id: z.string().min(1),
+  reason: z.string().min(1, 'İptal sebebi gerekli'),
+})
 
 // ─── Handlers ───────────────────────────────────────────────
 export function registerInvoiceHandlers(ipcMain: IpcMain) {
   // LIST
   ipcMain.handle('invoices:list', protectedProcedure('read', async (ctx, filters?: {
-    status?: string; type?: string; accountId?: string
+    status?: string; orderId?: string
   }) => {
     try {
       const where: any = { branchId: ctx.activeBranchId, isCancelled: false }
       if (filters?.status) where.status = filters.status
-      if (filters?.type) where.type = filters.type
+      if (filters?.orderId) where.orderId = filters.orderId
 
       return await ctx.prisma.invoice.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         include: {
-          order: {
-            select: {
-              id: true, orderNo: true, accountId: true,
-              account: { select: { id: true, code: true, name: true } },
-            },
-          },
+          order: { select: { orderNo: true, account: { select: { id: true, code: true, name: true } } } },
+          ledgerEntries: { where: { isCancelled: false } },
         },
       })
     } catch (error) {
@@ -74,7 +63,7 @@ export function registerInvoiceHandlers(ipcMain: IpcMain) {
         where: { id: args.id, branchId: ctx.activeBranchId },
         include: {
           order: { include: { account: true, items: true } },
-          ledgerEntries: true,
+          ledgerEntries: { where: { isCancelled: false } },
         },
       })
     } catch (error) {
@@ -84,124 +73,114 @@ export function registerInvoiceHandlers(ipcMain: IpcMain) {
   }))
 
   // CREATE FROM ORDER — the key handler
-  ipcMain.handle('invoices:createFromOrder', protectedProcedure('manage_ledger', async (ctx, data: {
-    orderId: string
-    dueDate?: string
-    notes?: string
-  }) => {
+  ipcMain.handle('invoices:createFromOrder', protectedProcedure('manage_ledger', async (ctx, rawData: any) => {
+    const parsed = createFromOrderSchema.safeParse(rawData)
+    if (!parsed.success) {
+      return { success: false, error: `Geçersiz giriş: ${parsed.error.errors.map(e => e.message).join(', ')}` }
+    }
+    const data = parsed.data
+
     try {
       return await ctx.prisma.$transaction(async (tx: any) => {
-        // 1. Fetch order with items
         const order = await tx.order.findFirst({
           where: { id: data.orderId, branchId: ctx.activeBranchId },
-          include: { items: true, account: true },
+          include: { account: true, items: true },
         })
-
         if (!order) return { success: false, error: 'Sipariş bulunamadı.' }
-        if (order.isCancelled) return { success: false, error: 'İptal edilmiş siparişten fatura kesilemez.' }
+        if (order.isCancelled) return { success: false, error: 'İptal edilmiş siparişe fatura kesilemez.' }
 
-        // 2. Check if already invoiced
-        const existingInvoice = await tx.invoice.findFirst({
+        // Check if already invoiced
+        const existingInv = await tx.invoice.findFirst({
           where: { orderId: data.orderId, isCancelled: false },
         })
-        if (existingInvoice) {
-          return { success: false, error: `Bu sipariş zaten faturalandı: ${existingInvoice.invoiceNo}` }
-        }
+        if (existingInv) return { success: false, error: `Bu sipariş zaten faturalandı: ${existingInv.invoiceNo}` }
 
-        // 3. Recalculate totals with Decimal.js for precision
-        let totalAmount = new Decimal(0)
+        // Recalculate totals with Decimal.js
+        let subtotal = new Decimal(0)
         for (const item of order.items) {
           const qty = new Decimal(String(item.quantity))
           const price = new Decimal(String(item.unitPrice))
-          totalAmount = totalAmount.plus(qty.mul(price))
+          subtotal = subtotal.plus(qty.mul(price))
         }
-
         const vatRate = new Decimal(String(order.vatRate))
-        const vatAmount = totalAmount.mul(vatRate).div(100)
-        const grandTotal = totalAmount.plus(vatAmount)
+        const taxTotal = subtotal.mul(vatRate).div(100)
+        const grandTotal = subtotal.plus(taxTotal)
 
-        // 4. Create invoice
-        const invoiceNo = await generateInvoiceNo(tx)
+        // Calculate due date
+        const dueDate = data.dueDate
+          ? new Date(data.dueDate)
+          : order.account?.paymentTermDays
+            ? new Date(Date.now() + order.account.paymentTermDays * 86400000)
+            : null
+
+        const invoiceNo = await nextDocumentNo(tx, ctx.activeBranchId, 'INVOICE')
+
         const invoice = await tx.invoice.create({
           data: {
-            invoiceNo,
-            orderId: order.id,
-            branchId: ctx.activeBranchId,
-            type: 'SALES',
-            currency: order.currency,
-            totalAmount: totalAmount.toFixed(2),
-            vatRate: String(order.vatRate),
-            vatAmount: vatAmount.toFixed(2),
-            grandTotal: grandTotal.toFixed(2),
-            exchangeRate: String(order.orderExchangeRate),
-            dueDate: data.dueDate ? new Date(data.dueDate) : null,
-            notes: data.notes,
-            status: 'DRAFT',
+            invoiceNo, orderId: order.id, branchId: ctx.activeBranchId,
+            date: new Date(), dueDate,
+            subtotal: subtotal.toFixed(2), taxTotal: taxTotal.toFixed(2),
+            grandTotal: grandTotal.toFixed(2), currency: order.currency,
+            status: 'FINALIZED',
           },
         })
 
-        // 5. Create LedgerEntry — THIS is when the accounting entry happens
-        const entryNo = await generateEntryNo(tx, 'INV')
-
-        // Debit: Customer owes us (Accounts Receivable)
+        // Create Ledger Entry — THIS is where accounting happens
+        const entryNo = await nextDocumentNo(tx, ctx.activeBranchId, 'LEDGER')
         await tx.ledgerEntry.create({
           data: {
-            entryNo,
-            accountId: order.accountId,
-            branchId: ctx.activeBranchId,
-            type: 'INVOICE',
-            debit: grandTotal.toFixed(2),
-            credit: '0',
+            entryNo, accountId: order.accountId,
+            branchId: ctx.activeBranchId, type: 'INVOICE',
+            debit: grandTotal.toFixed(2), credit: '0',
             currency: order.currency,
             exchangeRate: String(order.orderExchangeRate),
             costCenter: 'SALES',
-            description: `Satış faturası – ${invoiceNo} (Sipariş: ${order.orderNo})`,
-            referenceId: invoice.id,
-            referenceType: 'INVOICE',
+            description: `Satış Faturası: ${invoiceNo} (Sipariş: ${order.orderNo})`,
+            referenceId: order.id, referenceType: 'ORDER',
             invoiceId: invoice.id,
           },
         })
 
-        // 6. Update account balance
-        const currentBalance = new Decimal(String(order.account.currentBalance ?? 0))
-        const newBalance = currentBalance.plus(grandTotal)
+        // Update account balance
         await tx.account.update({
           where: { id: order.accountId },
-          data: { currentBalance: newBalance.toFixed(2) },
+          data: { currentBalance: { increment: grandTotal.toNumber() } },
         })
 
-        // 7. Audit log
         await writeAuditLog({
           entityType: 'Invoice', entityId: invoice.id, action: 'CREATE',
-          newData: { invoice, orderId: order.id, orderNo: order.orderNo },
+          newData: { invoiceNo, orderId: order.id, grandTotal: grandTotal.toFixed(2) },
           userId: ctx.user.id, branchId: ctx.activeBranchId,
-          description: `Fatura oluşturuldu: ${invoiceNo} (Sipariş: ${order.orderNo})`,
+          description: `Fatura kesildi: ${invoiceNo} – ${grandTotal.toFixed(2)} ${order.currency}`,
         })
 
         return { success: true, data: invoice }
       })
     } catch (error: any) {
+      console.error('[IPC] invoices:createFromOrder error:', error)
       return { success: false, error: error.message }
     }
   }))
 
-  // FINALIZE — mark invoice as finalized
-  ipcMain.handle('invoices:finalize', protectedProcedure('manage_ledger', async (ctx, args: { id: string }) => {
+  // FINALIZE
+  ipcMain.handle('invoices:finalize', protectedProcedure('manage_ledger', async (ctx, rawArgs: any) => {
+    const parsed = finalizeSchema.safeParse(rawArgs)
+    if (!parsed.success) return { success: false, error: 'Geçersiz giriş.' }
+
     try {
       const invoice = await ctx.prisma.invoice.findFirst({
-        where: { id: args.id, branchId: ctx.activeBranchId },
+        where: { id: parsed.data.id, branchId: ctx.activeBranchId },
       })
       if (!invoice) return { success: false, error: 'Fatura bulunamadı.' }
       if (invoice.isCancelled) return { success: false, error: 'İptal edilmiş fatura kesinleştirilemez.' }
-      if (invoice.status === 'FINALIZED') return { success: false, error: 'Fatura zaten kesinleştirilmiş.' }
 
       const updated = await ctx.prisma.invoice.update({
-        where: { id: args.id },
+        where: { id: parsed.data.id },
         data: { status: 'FINALIZED' },
       })
 
       await writeAuditLog({
-        entityType: 'Invoice', entityId: args.id, action: 'STATUS_CHANGE',
+        entityType: 'Invoice', entityId: parsed.data.id, action: 'STATUS_CHANGE',
         previousData: { status: invoice.status }, newData: { status: 'FINALIZED' },
         userId: ctx.user.id, branchId: ctx.activeBranchId,
         description: `Fatura kesinleştirildi: ${invoice.invoiceNo}`,
@@ -213,63 +192,59 @@ export function registerInvoiceHandlers(ipcMain: IpcMain) {
     }
   }))
 
-  // CANCEL
-  ipcMain.handle('invoices:cancel', protectedProcedure('manage_ledger', async (ctx, args: {
-    id: string; reason: string
-  }) => {
+  // CANCEL — with reversal ledger entry and account balance adjustment
+  ipcMain.handle('invoices:cancel', protectedProcedure('manage_ledger', async (ctx, rawArgs: any) => {
+    const parsed = cancelSchema.safeParse(rawArgs)
+    if (!parsed.success) return { success: false, error: `Geçersiz giriş: ${parsed.error.errors.map(e => e.message).join(', ')}` }
+    const args = parsed.data
+
     try {
       return await ctx.prisma.$transaction(async (tx: any) => {
         const invoice = await tx.invoice.findFirst({
           where: { id: args.id, branchId: ctx.activeBranchId },
-          include: { order: { select: { accountId: true, orderExchangeRate: true } } },
+          include: { order: true },
         })
         if (!invoice) return { success: false, error: 'Fatura bulunamadı.' }
         if (invoice.isCancelled) return { success: false, error: 'Zaten iptal edilmiş.' }
 
-        // Cancel invoice
         await tx.invoice.update({
           where: { id: args.id },
           data: { isCancelled: true, status: 'CANCELLED' },
         })
 
-        // Reversal ledger entry
-        const entryNo = await generateEntryNo(tx, 'REV')
-        const grandTotal = new Decimal(String(invoice.grandTotal))
+        // Mark original ledger entries as cancelled
+        await tx.ledgerEntry.updateMany({
+          where: { invoiceId: args.id, isCancelled: false },
+          data: { isCancelled: true },
+        })
 
+        // Create reversal ledger entry
+        const grandTotal = new Decimal(String(invoice.grandTotal))
+        const reversalNo = await nextDocumentNo(tx, ctx.activeBranchId, 'LEDGER')
         await tx.ledgerEntry.create({
           data: {
-            entryNo,
-            accountId: invoice.order!.accountId,
-            branchId: ctx.activeBranchId,
-            type: 'REVERSAL',
-            debit: '0',
-            credit: grandTotal.toFixed(2),
+            entryNo: reversalNo, accountId: invoice.order.accountId,
+            branchId: ctx.activeBranchId, type: 'REVERSAL',
+            debit: '0', credit: grandTotal.toFixed(2),
             currency: invoice.currency,
-            exchangeRate: String(invoice.exchangeRate ?? invoice.order!.orderExchangeRate),
+            exchangeRate: String(invoice.order.orderExchangeRate),
             costCenter: 'SALES_REVERSAL',
-            description: `Fatura iptali (Ters Fiş) – ${invoice.invoiceNo}: ${args.reason}`,
-            referenceId: args.id,
-            referenceType: 'INVOICE',
+            description: `Fatura İptali (Ters Fiş): ${invoice.invoiceNo} – ${args.reason}`,
+            referenceId: args.id, referenceType: 'INVOICE',
             invoiceId: args.id,
           },
         })
 
-        // Update account balance
-        if (invoice.order?.accountId) {
-          const account = await tx.account.findUnique({ where: { id: invoice.order.accountId } })
-          if (account) {
-            const currentBalance = new Decimal(String(account.currentBalance ?? 0))
-            const newBalance = currentBalance.minus(grandTotal)
-            await tx.account.update({
-              where: { id: account.id },
-              data: { currentBalance: newBalance.toFixed(2) },
-            })
-          }
-        }
+        // Reverse account balance
+        await tx.account.update({
+          where: { id: invoice.order.accountId },
+          data: { currentBalance: { decrement: grandTotal.toNumber() } },
+        })
 
         await writeAuditLog({
           entityType: 'Invoice', entityId: args.id, action: 'CANCEL',
-          previousData: invoice, userId: ctx.user.id, branchId: ctx.activeBranchId,
+          previousData: { status: invoice.status },
+          userId: ctx.user.id, branchId: ctx.activeBranchId,
           description: `Fatura iptal: ${invoice.invoiceNo} – ${args.reason}`,
         })
 

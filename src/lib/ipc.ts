@@ -42,6 +42,7 @@ export function getApi() {
       collection: (data: any) => ipcCall('ledger:collection', data),
       payment: (data: any) => ipcCall('ledger:payment', data),
       reversal: (originalEntryId: string, reason: string) => ipcCall('ledger:reversal', { originalEntryId, reason }),
+      statement: (accountId: string, dateFrom?: string, dateTo?: string) => ipcCall('ledger:statement', { accountId, dateFrom, dateTo }),
     },
     products: {
       list: (filters?: any) => ipcCall('products:list', filters),

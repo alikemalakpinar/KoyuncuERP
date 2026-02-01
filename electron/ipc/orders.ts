@@ -1,7 +1,7 @@
 /**
  * Order IPC Handlers – Branch-Scoped & Protected
  *
- * - Atomic DB-backed sequence for order numbers
+ * - Atomic DB-backed DocumentSequence for order numbers
  * - All financial math via Decimal.js
  * - $transaction for ACID compliance
  * - Stock reservation on create, unreservation on cancel
@@ -11,8 +11,10 @@
 
 import type { IpcMain } from 'electron'
 import Decimal from 'decimal.js'
+import { z } from 'zod'
 import { protectedProcedure } from './_secure'
 import { writeAuditLog } from './audit'
+import { nextDocumentNo } from '../services/sequence'
 import {
   calculateCommission,
   buildCommissionLedgerEntry,
@@ -20,30 +22,38 @@ import {
 
 Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP })
 
-// ─── Atomic Sequence ────────────────────────────────────────
-async function nextSequenceValue(tx: any, key: string): Promise<number> {
-  const result = await tx.$queryRaw`
-    INSERT INTO sequences (id, key, value)
-    VALUES (gen_random_uuid(), ${key}, 1)
-    ON CONFLICT (key)
-    DO UPDATE SET value = sequences.value + 1
-    RETURNING value
-  ` as { value: number }[]
-  return result[0].value
-}
+// ─── Validation Schemas ─────────────────────────────────────
+const orderItemSchema = z.object({
+  productName: z.string().min(1, 'Ürün adı gerekli'),
+  productGroup: z.string().optional(),
+  sku: z.string().optional(),
+  quantity: z.string().refine(v => new Decimal(v).gt(0), 'Miktar pozitif olmalı'),
+  unit: z.string().min(1),
+  unitPrice: z.string().refine(v => new Decimal(v).gte(0), 'Fiyat negatif olamaz'),
+  purchasePrice: z.string().optional(),
+})
 
-async function generateOrderNo(tx: any, branchCode?: string): Promise<string> {
-  const year = new Date().getFullYear()
-  const seq = await nextSequenceValue(tx, `order-${year}`)
-  const prefix = branchCode ? `${branchCode}-` : 'ORD-'
-  return `${prefix}${year}-${String(seq).padStart(4, '0')}`
-}
+const createOrderSchema = z.object({
+  accountId: z.string().min(1, 'Cari seçilmedi'),
+  currency: z.string().min(1),
+  vatRate: z.string().refine(v => new Decimal(v).gte(0), 'KDV negatif olamaz'),
+  agencyStaffId: z.string().optional(),
+  agencyCommissionRate: z.string().optional(),
+  staffCommissionRate: z.string().optional(),
+  exchangeRate: z.string().refine(v => new Decimal(v).gt(0), 'Kur pozitif olmalı'),
+  notes: z.string().optional(),
+  items: z.array(orderItemSchema).min(1, 'En az 1 kalem gerekli'),
+})
 
-async function generateEntryNo(tx: any, prefix = 'LED'): Promise<string> {
-  const year = new Date().getFullYear()
-  const seq = await nextSequenceValue(tx, `${prefix.toLowerCase()}-${year}`)
-  return `${prefix}-${year}-${String(seq).padStart(5, '0')}`
-}
+const updateStatusSchema = z.object({
+  id: z.string().min(1),
+  status: z.enum(['DRAFT', 'CONFIRMED', 'IN_PRODUCTION', 'READY', 'PARTIALLY_SHIPPED', 'SHIPPED', 'DELIVERED', 'CANCELLED']),
+})
+
+const cancelOrderSchema = z.object({
+  id: z.string().min(1),
+  reason: z.string().min(1, 'İptal sebebi gerekli'),
+})
 
 // ─── Handlers ───────────────────────────────────────────────
 export function registerOrderHandlers(ipcMain: IpcMain) {
@@ -87,6 +97,7 @@ export function registerOrderHandlers(ipcMain: IpcMain) {
           commissionRecords: { where: { isCancelled: false } },
           agencyStaff: { include: { agency: { include: { account: true } } } },
           payments: true,
+          invoices: true,
         },
       })
     } catch (error) {
@@ -96,12 +107,15 @@ export function registerOrderHandlers(ipcMain: IpcMain) {
   }))
 
   // CREATE — wrapped in $transaction, Decimal.js math, stock reservation, NO ledger
-  ipcMain.handle('orders:create', protectedProcedure('manage_orders', async (ctx, data: {
-    accountId: string; currency: string; vatRate: string
-    agencyStaffId?: string; agencyCommissionRate?: string; staffCommissionRate?: string
-    exchangeRate: string; notes?: string
-    items: { productName: string; productGroup?: string; sku?: string; quantity: string; unit: string; unitPrice: string; purchasePrice?: string }[]
-  }) => {
+  ipcMain.handle('orders:create', protectedProcedure('manage_orders', async (ctx, rawData: any) => {
+    // Zod validation
+    const parsed = createOrderSchema.safeParse(rawData)
+    if (!parsed.success) {
+      const msg = parsed.error.errors.map(e => e.message).join(', ')
+      return { success: false, error: `Geçersiz giriş: ${msg}` }
+    }
+    const data = parsed.data
+
     try {
       return await ctx.prisma.$transaction(async (tx: any) => {
         // Verify account belongs to this branch
@@ -128,7 +142,7 @@ export function registerOrderHandlers(ipcMain: IpcMain) {
         const vatAmount = totalAmount.mul(vatRate).div(100)
         const grandTotal = totalAmount.plus(vatAmount)
 
-        const orderNo = await generateOrderNo(tx)
+        const orderNo = await nextDocumentNo(tx, ctx.activeBranchId, 'ORDER')
 
         const order = await tx.order.create({
           data: {
@@ -155,44 +169,41 @@ export function registerOrderHandlers(ipcMain: IpcMain) {
         for (const item of data.items) {
           if (!item.sku) continue
           const stock = await tx.stock.findFirst({
-            where: { sku: item.sku, branchId: ctx.activeBranchId },
+            where: { variant: { sku: item.sku }, warehouse: { branch: { id: ctx.activeBranchId } } },
           })
           if (stock) {
             const newReserved = new Decimal(String(stock.reservedQuantity ?? 0))
               .plus(new Decimal(item.quantity))
             await tx.stock.update({
               where: { id: stock.id },
-              data: { reservedQuantity: newReserved.toFixed(2) },
-            })
-            await tx.stockMovement.create({
-              data: {
-                stockId: stock.id, branchId: ctx.activeBranchId,
-                type: 'RESERVE', quantity: item.quantity,
-                referenceId: order.id, referenceType: 'ORDER',
-                description: `Sipariş rezerve: ${orderNo}`,
-              },
+              data: { reservedQuantity: Math.round(newReserved.toNumber()) },
             })
           }
         }
 
         await writeAuditLog({
           entityType: 'Order', entityId: order.id, action: 'CREATE',
-          newData: { order, items: itemsData },
+          newData: { orderNo, accountId: data.accountId, grandTotal: grandTotal.toFixed(2) },
           userId: ctx.user.id, branchId: ctx.activeBranchId,
-          description: `Yeni sipariş: ${order.orderNo}`,
+          description: `Yeni sipariş: ${order.orderNo} – ${grandTotal.toFixed(2)} ${data.currency}`,
         })
 
         return { success: true, data: order }
       })
     } catch (error: any) {
+      console.error('[IPC] orders:create error:', error)
       return { success: false, error: error.message }
     }
   }))
 
   // UPDATE STATUS — with auto-commission on DELIVERED
-  ipcMain.handle('orders:updateStatus', protectedProcedure('manage_orders', async (ctx, args: {
-    id: string; status: string
-  }) => {
+  ipcMain.handle('orders:updateStatus', protectedProcedure('manage_orders', async (ctx, rawArgs: any) => {
+    const parsed = updateStatusSchema.safeParse(rawArgs)
+    if (!parsed.success) {
+      return { success: false, error: `Geçersiz giriş: ${parsed.error.errors.map(e => e.message).join(', ')}` }
+    }
+    const args = parsed.data
+
     try {
       return await ctx.prisma.$transaction(async (tx: any) => {
         const order = await tx.order.findFirst({
@@ -242,13 +253,9 @@ export function registerOrderHandlers(ipcMain: IpcMain) {
             String(order.orderExchangeRate),
           )
 
-          const entryNo = await generateEntryNo(tx, 'COM')
+          const entryNo = await nextDocumentNo(tx, ctx.activeBranchId, 'COMMISSION')
           await tx.ledgerEntry.create({
-            data: {
-              entryNo,
-              branchId: ctx.activeBranchId,
-              ...ledgerData,
-            },
+            data: { entryNo, branchId: ctx.activeBranchId, ...ledgerData },
           })
         }
 
@@ -267,9 +274,13 @@ export function registerOrderHandlers(ipcMain: IpcMain) {
   }))
 
   // CANCEL — stock unreservation, invoice cancellation, commission reversal
-  ipcMain.handle('orders:cancel', protectedProcedure('manage_orders', async (ctx, args: {
-    id: string; reason: string
-  }) => {
+  ipcMain.handle('orders:cancel', protectedProcedure('manage_orders', async (ctx, rawArgs: any) => {
+    const parsed = cancelOrderSchema.safeParse(rawArgs)
+    if (!parsed.success) {
+      return { success: false, error: `Geçersiz giriş: ${parsed.error.errors.map(e => e.message).join(', ')}` }
+    }
+    const args = parsed.data
+
     try {
       return await ctx.prisma.$transaction(async (tx: any) => {
         const order = await tx.order.findFirst({
@@ -289,24 +300,13 @@ export function registerOrderHandlers(ipcMain: IpcMain) {
         for (const item of order.items) {
           if (!item.sku) continue
           const stock = await tx.stock.findFirst({
-            where: { sku: item.sku, branchId: ctx.activeBranchId },
+            where: { variant: { sku: item.sku }, warehouse: { branch: { id: ctx.activeBranchId } } },
           })
           if (stock) {
-            const newReserved = Decimal.max(
-              new Decimal(0),
-              new Decimal(String(stock.reservedQuantity ?? 0)).minus(new Decimal(String(item.quantity))),
-            )
+            const newReserved = Math.max(0, stock.reservedQuantity - Math.round(new Decimal(String(item.quantity)).toNumber()))
             await tx.stock.update({
               where: { id: stock.id },
-              data: { reservedQuantity: newReserved.toFixed(2) },
-            })
-            await tx.stockMovement.create({
-              data: {
-                stockId: stock.id, branchId: ctx.activeBranchId,
-                type: 'UNRESERVE', quantity: String(item.quantity),
-                referenceId: args.id, referenceType: 'ORDER',
-                description: `Sipariş iptal – rezerve kaldırma: ${order.orderNo}`,
-              },
+              data: { reservedQuantity: newReserved },
             })
           }
         }
@@ -318,13 +318,13 @@ export function registerOrderHandlers(ipcMain: IpcMain) {
         for (const inv of invoices) {
           await tx.invoice.update({ where: { id: inv.id }, data: { isCancelled: true, status: 'CANCELLED' } })
 
-          const reversalEntryNo = await generateEntryNo(tx, 'REV')
+          const reversalEntryNo = await nextDocumentNo(tx, ctx.activeBranchId, 'LEDGER')
           await tx.ledgerEntry.create({
             data: {
               entryNo: reversalEntryNo, accountId: order.accountId,
               branchId: ctx.activeBranchId, type: 'REVERSAL',
               debit: '0', credit: String(inv.grandTotal),
-              currency: inv.currency, exchangeRate: String(inv.exchangeRate ?? order.orderExchangeRate),
+              currency: inv.currency, exchangeRate: String(order.orderExchangeRate),
               costCenter: 'SALES_REVERSAL',
               description: `Fatura iptali (Ters Fiş) – ${inv.invoiceNo}: ${args.reason}`,
               referenceId: inv.id, referenceType: 'INVOICE',
@@ -338,9 +338,22 @@ export function registerOrderHandlers(ipcMain: IpcMain) {
           data: { isCancelled: true },
         })
 
+        // 5. Update account balance (reverse invoice amounts)
+        if (invoices.length > 0) {
+          const totalInvoiced = invoices.reduce(
+            (sum: Decimal, inv: any) => sum.plus(new Decimal(String(inv.grandTotal))),
+            new Decimal(0),
+          )
+          await tx.account.update({
+            where: { id: order.accountId },
+            data: { currentBalance: { decrement: totalInvoiced.toNumber() } },
+          })
+        }
+
         await writeAuditLog({
           entityType: 'Order', entityId: args.id, action: 'CANCEL',
-          previousData: order, userId: ctx.user.id, branchId: ctx.activeBranchId,
+          previousData: { orderNo: order.orderNo, status: order.status },
+          userId: ctx.user.id, branchId: ctx.activeBranchId,
           description: `Sipariş iptal: ${order.orderNo} – ${args.reason}`,
         })
 

@@ -234,6 +234,20 @@ export function useCreateInvoice() {
   })
 }
 
+// ── Ledger Statement ──────────────────────────────────────
+
+export function useAccountStatement(accountId: string, dateFrom?: string, dateTo?: string) {
+  return useQuery({
+    queryKey: ['ledger', 'statement', accountId, dateFrom, dateTo],
+    queryFn: async () => {
+      if (hasIpc()) return getApi().ledger.statement(accountId, dateFrom, dateTo)
+      return null
+    },
+    enabled: !!accountId,
+    staleTime: 30_000,
+  })
+}
+
 // ── Returns ───────────────────────────────────────────────
 
 export function useReturnsQuery(filters?: { status?: string }) {
