@@ -63,6 +63,8 @@ model Branch {
   documents         Document[]
   shipments         Shipment[]
   landedCosts       LandedCost[]
+  documentSequences DocumentSequence[]
+  salesReturns      SalesReturn[]
 
   @@map("branches")
 }
@@ -223,6 +225,7 @@ model ProductVariant {
   inventoryLots         InventoryLot[]
   inventoryTransactions InventoryTransaction[]
   priceListItems        PriceListItem[]
+  salesReturnItems      SalesReturnItem[]
 
   @@index([productId])
   @@map("product_variants")
@@ -365,6 +368,7 @@ model Account {
   orders          Order[]
   ledgerEntries   LedgerEntry[]
   agency          Agency?
+  salesReturns    SalesReturn[]
 
   @@unique([branchId, code])
   @@index([branchId])
@@ -467,6 +471,7 @@ model Order {
   commissionRecords CommissionRecord[]
   invoices          Invoice[]
   payments          Payment[]
+  salesReturns      SalesReturn[]
 
   @@unique([branchId, orderNo])
   @@index([branchId, createdAt])
@@ -810,12 +815,66 @@ model ExchangeRate {
   @@map("exchange_rates")
 }
 
-// ─── Sequence (Atomic Counters) ──────────────────────────────
+// ─── Document Sequence (Atomic Counters) ─────────────────────
 
-model Sequence {
-  id    String @id @default(cuid())
-  key   String @unique          // e.g. "order:IST-2026", "invoice:IST-2026"
-  value Int    @default(0)
+// ─── Sales Return (İade) ────────────────────────────────────
 
-  @@map("sequences")
+model SalesReturn {
+  id          String            @id @default(cuid())
+  returnNo    String            @unique @map("return_no")
+  orderId     String            @map("order_id")
+  order       Order             @relation(fields: [orderId], references: [id])
+  branchId    String            @map("branch_id")
+  branch      Branch            @relation(fields: [branchId], references: [id])
+  accountId   String            @map("account_id")
+  account     Account           @relation(fields: [accountId], references: [id])
+  reason      String
+  status      SalesReturnStatus @default(PENDING)
+  totalAmount Decimal           @default(0) @map("total_amount") @db.Decimal(15, 2)
+  currency    String            @default("USD")
+  isCancelled Boolean           @default(false) @map("is_cancelled")
+  createdBy   String            @map("created_by")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  items SalesReturnItem[]
+
+  @@index([branchId, createdAt])
+  @@index([orderId])
+  @@map("sales_returns")
+}
+
+model SalesReturnItem {
+  id            String      @id @default(cuid())
+  salesReturnId String      @map("sales_return_id")
+  salesReturn   SalesReturn @relation(fields: [salesReturnId], references: [id])
+  variantId     String      @map("variant_id")
+  variant       ProductVariant @relation(fields: [variantId], references: [id])
+  quantity      Decimal     @db.Decimal(10, 2)
+  unitPrice     Decimal     @map("unit_price") @db.Decimal(15, 2)
+  totalPrice    Decimal     @map("total_price") @db.Decimal(15, 2)
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  @@map("sales_return_items")
+}
+
+enum SalesReturnStatus {
+  PENDING
+  APPROVED
+  COMPLETED
+  CANCELLED
+}
+
+model DocumentSequence {
+  id         String @id @default(cuid())
+  branchId   String @map("branch_id")
+  branch     Branch @relation(fields: [branchId], references: [id])
+  type       String // ORDER, INVOICE, WAYBILL, LEDGER, COMMISSION, RETURN
+  prefix     String // e.g. "ORD", "INV", "WBL"
+  year       Int
+  currentVal Int    @default(0) @map("current_val")
+
+  @@unique([branchId, type, year])
+  @@index([branchId])
+  @@map("document_sequences")
 }

@@ -87,6 +87,7 @@ function buildBreadcrumbs(pathname: string): { label: string; href: string }[] {
     '/cheques': 'Çek / Senet',
     '/waybills': 'İrsaliyeler',
     '/cash-book': 'Kasa Defteri',
+    '/returns': 'Satış İadeleri',
   }
 
   if (pathname === '/') {

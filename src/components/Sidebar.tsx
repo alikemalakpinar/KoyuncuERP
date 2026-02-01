@@ -6,7 +6,7 @@ import {
   FileText, Settings, BarChart3, Handshake, Package,
   Receipt, TrendingUp, Award, LogOut, Activity, Building2,
   ClipboardList, Ship, Palette, Stamp, ChevronsLeft, ChevronsRight,
-  FileCheck, Truck, Wallet,
+  FileCheck, Truck, Wallet, RotateCcw,
 } from 'lucide-react'
 import { useAuth, roleLabels, type UserRole } from '../contexts/AuthContext'
 
@@ -59,6 +59,7 @@ export default function Sidebar() {
         { to: '/stock-analysis', icon: TrendingUp, label: 'Stok & Analiz', show: role !== 'VIEWER' },
         { to: '/shipments', icon: Ship, label: 'Sevkiyat', show: role !== 'VIEWER' },
         { to: '/export-docs', icon: Stamp, label: 'İhracat Belgeleri', show: role !== 'VIEWER' && role !== 'SALES' },
+        { to: '/returns', icon: RotateCcw, label: 'Satış İadeleri', show: role !== 'VIEWER' },
       ],
     },
     {

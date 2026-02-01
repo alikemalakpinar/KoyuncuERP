@@ -56,6 +56,14 @@ export function getApi() {
     invoices: {
       createFromOrder: (data: any) => ipcCall('invoices:createFromOrder', data),
     },
+    returns: {
+      list: (filters?: any) => ipcCall('returns:list', filters),
+      get: (id: string) => ipcCall('returns:get', { id }),
+      create: (data: any) => ipcCall('returns:create', data),
+      approve: (id: string) => ipcCall('returns:approve', { id }),
+      complete: (id: string, warehouseId: string) => ipcCall('returns:complete', { id, warehouseId }),
+      cancel: (id: string, reason?: string) => ipcCall('returns:cancel', { id, reason }),
+    },
     analytics: {
       dashboardKpis: () => ipcCall('analytics:dashboardKpis'),
       profitAnalysis: () => ipcCall('analytics:profitAnalysis'),
@@ -163,6 +171,14 @@ export const api = {
   cashClose: (registerId: string, actualCash: string) => ipcCall('cash:close', { registerId, actualCash }),
   cashTransact: (data: any) => ipcCall('cash:transact', data),
   cashTransactions: (registerId: string, date?: string) => ipcCall('cash:transactions', { registerId, date }),
+
+  // Returns
+  returnsList: (filters?: any) => ipcCall('returns:list', filters),
+  returnsGet: (id: string) => ipcCall('returns:get', { id }),
+  returnsCreate: (data: any) => ipcCall('returns:create', data),
+  returnsApprove: (id: string) => ipcCall('returns:approve', { id }),
+  returnsComplete: (id: string, warehouseId: string) => ipcCall('returns:complete', { id, warehouseId }),
+  returnsCancel: (id: string, reason?: string) => ipcCall('returns:cancel', { id, reason }),
 
   // Payments
   paymentCreate: (data: any) => ipcCall('payments:create', data),
