@@ -1,9 +1,9 @@
 import { motion } from 'framer-motion'
 import { Building2, ArrowRight } from 'lucide-react'
-import { useAuth, roleLabels } from '../contexts/AuthContext'
+import { useAuth } from '../contexts/AuthContext'
 
 export default function BranchSelectorPage() {
-  const { user, branches, selectBranch, logout } = useAuth()
+  const { user, availableBranches: branches, selectBranch, logout } = useAuth()
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 px-6">
@@ -35,7 +35,7 @@ export default function BranchSelectorPage() {
               <div className="flex-1 min-w-0">
                 <p className="text-base font-semibold text-white">{branch.branchName}</p>
                 <p className="text-sm text-slate-400">
-                  {branch.branchCode} &middot; {roleLabels[branch.role]}
+                  {branch.branchCode} &middot; {branch.city}
                 </p>
               </div>
               <ArrowRight className="h-5 w-5 text-slate-500 group-hover:text-brand-400 transition-colors" />

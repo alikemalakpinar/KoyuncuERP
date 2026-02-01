@@ -50,14 +50,14 @@ export default function ProfitAnalysisPage() {
   }
 
   const totalNetProfit = orders.reduce(
-    (sum, o) => sum + parseFloat(o.netProfit.replace(/,/g, '')),
+    (sum: number, o: any) => sum + parseFloat(o.netProfit.replace(/,/g, '')),
     0,
   )
   const avgMargin =
-    orders.reduce((sum, o) => sum + parseFloat(o.netMargin), 0) / orders.length
+    orders.reduce((sum: number, o: any) => sum + parseFloat(o.netMargin), 0) / orders.length
 
   // Chart data
-  const chartData = orders.map((o) => ({
+  const chartData = orders.map((o: any) => ({
     name: o.orderNo.split('-').pop(),
     kar: parseFloat(o.netProfit.replace(/,/g, '')),
     marj: parseFloat(o.netMargin),
@@ -157,7 +157,7 @@ export default function ProfitAnalysisPage() {
                 formatter={(value: number) => [`$${value.toLocaleString()}`, 'Net Kar']}
               />
               <Bar dataKey="kar" radius={[6, 6, 0, 0]}>
-                {chartData.map((entry, idx) => (
+                {chartData.map((entry: any, idx: number) => (
                   <Cell
                     key={idx}
                     fill={entry.kar > 10000 ? '#40c057' : '#748ffc'}

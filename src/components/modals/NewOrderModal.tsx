@@ -96,7 +96,7 @@ export default function NewOrderModal({ open, onClose }: Props) {
   const { data: accounts = [] } = useAccountsQuery({ type: 'CUSTOMER' })
   const createOrder = useCreateOrder()
   const { toast } = useToast()
-  const { hasPermission, user } = useAuth()
+  const { hasPermission } = useAuth()
 
   // Core fields
   const [accountId, setAccountId] = useState('')
@@ -214,11 +214,7 @@ export default function NewOrderModal({ open, onClose }: Props) {
 
     // Show margin guard toast if below cost
     if (belowCost) {
-      toast?.({
-        type: 'warning',
-        title: 'Maliyet Altı Satış!',
-        message: `${item.productName} maliyetin altında fiyatlandırıldı ($${resolvedPrice} < $${item.baseCost})`,
-      })
+      toast('warning', `${item.productName} maliyetin altında fiyatlandırıldı ($${resolvedPrice} < $${item.baseCost})`)
     }
   }
 

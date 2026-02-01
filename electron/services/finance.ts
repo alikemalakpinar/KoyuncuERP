@@ -138,12 +138,12 @@ export class FinanceService {
       for (const item of items) {
         const diff = parseFloat(item.unrealizedGainLoss)
         if (Math.abs(diff) < 0.01) continue
-        const entryNo = `FXR-${Date.now().toString(36).toUpperCase()}-${entries.length}`
+        const entryNo: string = `FXR-${Date.now().toString(36).toUpperCase()}-${entries.length}`
         const invoice = await tx.invoice.findUnique({
           where: { id: item.invoiceId }, select: { order: { select: { accountId: true } } },
         })
         if (!invoice?.order?.accountId) continue
-        const entry = await tx.ledgerEntry.create({
+        const entry: any = await tx.ledgerEntry.create({
           data: {
             entryNo, accountId: invoice.order.accountId,
             branchId: branchId!, type: 'FX_GAIN_LOSS',

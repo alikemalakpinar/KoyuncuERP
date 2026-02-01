@@ -20,16 +20,16 @@ export default function AgencyCommissionsPage() {
   const { data: agencies = [] } = useAgencyPerformanceQuery()
 
   const totalCommission = agencies.reduce(
-    (sum, a) => sum + parseFloat(a.commission.replace(/,/g, '')),
+    (sum: number, a: any) => sum + parseFloat(a.commission.replace(/,/g, '')),
     0,
   )
   const totalPending = agencies.reduce(
-    (sum, a) => sum + parseFloat(a.pendingCommission.replace(/,/g, '')),
+    (sum: number, a: any) => sum + parseFloat(a.pendingCommission.replace(/,/g, '')),
     0,
   )
-  const totalOrders = agencies.reduce((sum, a) => sum + a.orderCount, 0)
+  const totalOrders = agencies.reduce((sum: number, a: any) => sum + a.orderCount, 0)
 
-  const chartData = agencies.map((a) => ({
+  const chartData = agencies.map((a: any) => ({
     name: a.name.split(' ')[0],
     satis: parseFloat(a.totalSales.replace(/,/g, '')) / 1000,
     komisyon: parseFloat(a.commission.replace(/,/g, '')) / 1000,
@@ -183,7 +183,7 @@ export default function AgencyCommissionsPage() {
               </tr>
             </thead>
             <tbody>
-              {agencies.map((agency) => (
+              {agencies.map((agency: any) => (
                 <tr
                   key={agency.id}
                   className="border-b border-border/50 dark:border-border-dark/50 hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary transition-colors"
