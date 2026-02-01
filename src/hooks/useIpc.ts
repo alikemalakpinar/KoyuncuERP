@@ -6,7 +6,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { hasIpc, getApi } from '../lib/ipc'
+import { hasIpc, getApi, api } from '../lib/ipc'
 import {
   useAccounts as useDemoAccounts,
   useAccountHealth as useDemoAccountHealth,
@@ -346,5 +346,393 @@ export function useAgencyPerformanceQuery() {
       return demoData
     },
     staleTime: 60_000,
+  })
+}
+
+// ── PIM: Attributes ─────────────────────────────────────────
+
+export function usePimAttributesQuery() {
+  return useQuery({
+    queryKey: ['pim', 'attributes'],
+    queryFn: async () => {
+      if (hasIpc()) return api.pimAttributesList()
+      return []
+    },
+    staleTime: 60_000,
+  })
+}
+
+export function useCreatePimAttribute() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: any) => {
+      if (hasIpc()) return api.pimAttributesCreate(data)
+      return { success: true }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pim', 'attributes'] }),
+  })
+}
+
+export function usePimProductAttributes(productId: string | null) {
+  return useQuery({
+    queryKey: ['pim', 'productAttributes', productId],
+    queryFn: async () => {
+      if (!productId) return []
+      if (hasIpc()) return api.pimAttributesGetProduct(productId)
+      return []
+    },
+    enabled: !!productId,
+  })
+}
+
+export function useSetPimAttributeValue() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: any) => {
+      if (hasIpc()) return api.pimAttributesSetValue(data)
+      return { success: true }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pim', 'productAttributes'] }),
+  })
+}
+
+// ── PIM: Categories ─────────────────────────────────────────
+
+export function usePimCategoriesQuery() {
+  return useQuery({
+    queryKey: ['pim', 'categories'],
+    queryFn: async () => {
+      if (hasIpc()) return api.pimCategoriesList()
+      return []
+    },
+    staleTime: 60_000,
+  })
+}
+
+export function useCreatePimCategory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: any) => {
+      if (hasIpc()) return api.pimCategoriesCreate(data)
+      return { success: true }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pim', 'categories'] }),
+  })
+}
+
+// ── PIM: UoM ────────────────────────────────────────────────
+
+export function usePimUomQuery(category?: string) {
+  return useQuery({
+    queryKey: ['pim', 'uom', category],
+    queryFn: async () => {
+      if (hasIpc()) return api.pimUomList(category)
+      return []
+    },
+    staleTime: 60_000,
+  })
+}
+
+export function useCreatePimUom() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: any) => {
+      if (hasIpc()) return api.pimUomCreate(data)
+      return { success: true }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pim', 'uom'] }),
+  })
+}
+
+export function useAddPimUomConversion() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: any) => {
+      if (hasIpc()) return api.pimUomAddConversion(data)
+      return { success: true }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pim', 'uom'] }),
+  })
+}
+
+export function usePimUomConversionsQuery(productId?: string) {
+  return useQuery({
+    queryKey: ['pim', 'uomConversions', productId],
+    queryFn: async () => {
+      if (hasIpc()) return api.pimUomConversions(productId)
+      return []
+    },
+    staleTime: 60_000,
+  })
+}
+
+// ── PIM: Dimensions ─────────────────────────────────────────
+
+export function usePimDimensionsQuery() {
+  return useQuery({
+    queryKey: ['pim', 'dimensions'],
+    queryFn: async () => {
+      if (hasIpc()) return api.pimDimensionsList()
+      return []
+    },
+    staleTime: 60_000,
+  })
+}
+
+export function useCreatePimDimension() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: any) => {
+      if (hasIpc()) return api.pimDimensionsCreate(data)
+      return { success: true }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pim', 'dimensions'] }),
+  })
+}
+
+export function useAddPimDimensionValue() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: any) => {
+      if (hasIpc()) return api.pimDimensionsAddValue(data)
+      return { success: true }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['pim', 'dimensions'] }),
+  })
+}
+
+export function useGeneratePimVariants() {
+  return useMutation({
+    mutationFn: async (axes: Record<string, string[]>) => {
+      if (hasIpc()) return api.pimDimensionsGenerate(axes)
+      return []
+    },
+  })
+}
+
+// ── Finance++: Chart of Accounts ────────────────────────────
+
+export function useCoaListQuery() {
+  return useQuery({
+    queryKey: ['coa', 'list'],
+    queryFn: async () => {
+      if (hasIpc()) return api.coaList()
+      return []
+    },
+    staleTime: 60_000,
+  })
+}
+
+export function useCoaTreeQuery() {
+  return useQuery({
+    queryKey: ['coa', 'tree'],
+    queryFn: async () => {
+      if (hasIpc()) return api.coaTree()
+      return []
+    },
+    staleTime: 60_000,
+  })
+}
+
+export function useCreateCoaAccount() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: any) => {
+      if (hasIpc()) return api.coaCreate(data)
+      return { success: true }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['coa'] })
+    },
+  })
+}
+
+// ── Finance++: Cheques ──────────────────────────────────────
+
+export function useChequesQuery(filters?: any) {
+  return useQuery({
+    queryKey: ['cheques', filters],
+    queryFn: async () => {
+      if (hasIpc()) return api.chequesList(filters)
+      return []
+    },
+    staleTime: 30_000,
+  })
+}
+
+export function useCreateCheque() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: any) => {
+      if (hasIpc()) return api.chequesCreate(data)
+      return { success: true }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['cheques'] }),
+  })
+}
+
+export function useTransitionCheque() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: any) => {
+      if (hasIpc()) return api.chequesTransition(data)
+      return { success: true }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['cheques'] })
+      qc.invalidateQueries({ queryKey: ['accounts'] })
+    },
+  })
+}
+
+export function useChequeHistoryQuery(chequeId: string | null) {
+  return useQuery({
+    queryKey: ['cheques', 'history', chequeId],
+    queryFn: async () => {
+      if (!chequeId) return []
+      if (hasIpc()) return api.chequesHistory(chequeId)
+      return []
+    },
+    enabled: !!chequeId,
+  })
+}
+
+// ── Finance++: Cost Centers ─────────────────────────────────
+
+export function useCostCentersQuery() {
+  return useQuery({
+    queryKey: ['costCenters', 'list'],
+    queryFn: async () => {
+      if (hasIpc()) return api.costCentersList()
+      return []
+    },
+    staleTime: 60_000,
+  })
+}
+
+export function useCostCentersTreeQuery() {
+  return useQuery({
+    queryKey: ['costCenters', 'tree'],
+    queryFn: async () => {
+      if (hasIpc()) return api.costCentersTree()
+      return []
+    },
+    staleTime: 60_000,
+  })
+}
+
+export function useCreateCostCenter() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: any) => {
+      if (hasIpc()) return api.costCentersCreate(data)
+      return { success: true }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['costCenters'] }),
+  })
+}
+
+// ── MES: BOM ────────────────────────────────────────────────
+
+export function useBomListQuery(productId?: string) {
+  return useQuery({
+    queryKey: ['bom', 'list', productId],
+    queryFn: async () => {
+      if (hasIpc()) return api.bomList(productId)
+      return []
+    },
+    staleTime: 30_000,
+  })
+}
+
+export function useBomQuery(id: string | null) {
+  return useQuery({
+    queryKey: ['bom', id],
+    queryFn: async () => {
+      if (!id) return null
+      if (hasIpc()) return api.bomGet(id)
+      return null
+    },
+    enabled: !!id,
+  })
+}
+
+export function useCreateBom() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: any) => {
+      if (hasIpc()) return api.bomCreate(data)
+      return { success: true }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['bom'] }),
+  })
+}
+
+export function useBomCostQuery(bomId: string | null) {
+  return useQuery({
+    queryKey: ['bom', 'cost', bomId],
+    queryFn: async () => {
+      if (!bomId) return null
+      if (hasIpc()) return api.bomCalculateCost(bomId)
+      return null
+    },
+    enabled: !!bomId,
+  })
+}
+
+// ── MES: Work Orders ────────────────────────────────────────
+
+export function useWorkOrdersQuery(filters?: any) {
+  return useQuery({
+    queryKey: ['workOrders', filters],
+    queryFn: async () => {
+      if (hasIpc()) return api.workOrdersList(filters)
+      return []
+    },
+    staleTime: 30_000,
+  })
+}
+
+export function useWorkOrderQuery(id: string | null) {
+  return useQuery({
+    queryKey: ['workOrder', id],
+    queryFn: async () => {
+      if (!id) return null
+      if (hasIpc()) return api.workOrdersGet(id)
+      return null
+    },
+    enabled: !!id,
+  })
+}
+
+export function useCreateWorkOrder() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: any) => {
+      if (hasIpc()) return api.workOrdersCreate(data)
+      return { success: true }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['workOrders'] }),
+  })
+}
+
+export function useWorkOrderAction() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ action, ...params }: { action: string; [key: string]: any }) => {
+      if (!hasIpc()) return { success: true }
+      switch (action) {
+        case 'release': return api.workOrdersRelease(params.id)
+        case 'start': return api.workOrdersStart(params.id)
+        case 'consume': return api.workOrdersConsume(params.workOrderId, params.warehouseId)
+        case 'complete': return api.workOrdersComplete(params.workOrderId, params.warehouseId, params.producedQty, params.wasteQty)
+        case 'cancel': return api.workOrdersCancel(params.id)
+        default: throw new Error(`Unknown action: ${action}`)
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['workOrders'] })
+      qc.invalidateQueries({ queryKey: ['workOrder'] })
+    },
   })
 }

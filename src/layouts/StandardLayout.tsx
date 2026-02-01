@@ -89,6 +89,10 @@ function buildBreadcrumbs(pathname: string): { label: string; href: string }[] {
     '/cash-book': 'Kasa Defteri',
     '/returns': 'Satış İadeleri',
     '/stock-count': 'Stok Sayım',
+    '/pim': 'PIM (Ürün Bilgi)',
+    '/chart-of-accounts': 'Hesap Planı',
+    '/cost-centers': 'Maliyet Merkezleri',
+    '/manufacturing': 'Üretim (MES)',
   }
 
   if (pathname === '/') {

@@ -25,6 +25,20 @@ const ALLOWED_CHANNELS = [
   'analytics:agencyPerformance', 'analytics:accountHealth',
   'cash:registers', 'cash:open', 'cash:close', 'cash:transact', 'cash:transactions',
   'payments:create',
+  // PIM
+  'pim:attributes:list', 'pim:attributes:create', 'pim:attributes:setValue',
+  'pim:attributes:getProduct', 'pim:attributes:filter',
+  'pim:categories:list', 'pim:categories:create', 'pim:categories:assignAttribute',
+  'pim:uom:list', 'pim:uom:create', 'pim:uom:addConversion', 'pim:uom:convert', 'pim:uom:conversions',
+  'pim:dimensions:list', 'pim:dimensions:create', 'pim:dimensions:addValue', 'pim:dimensions:generate',
+  // Finance++
+  'coa:list', 'coa:create', 'coa:update', 'coa:tree',
+  'cheques:list', 'cheques:create', 'cheques:transition', 'cheques:history',
+  'costCenters:list', 'costCenters:create', 'costCenters:tree', 'costCenters:update',
+  // MES
+  'bom:list', 'bom:get', 'bom:create', 'bom:calculateCost',
+  'workOrders:list', 'workOrders:get', 'workOrders:create', 'workOrders:release',
+  'workOrders:start', 'workOrders:consume', 'workOrders:complete', 'workOrders:cancel',
 ]
 
 contextBridge.exposeInMainWorld('api', {

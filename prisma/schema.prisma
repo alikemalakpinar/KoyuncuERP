@@ -65,6 +65,8 @@ model Branch {
   landedCosts       LandedCost[]
   documentSequences DocumentSequence[]
   salesReturns      SalesReturn[]
+  cheques           Cheque[]
+  workOrders        WorkOrder[]
 
   @@map("branches")
 }
@@ -186,6 +188,9 @@ model Product {
   variants       ProductVariant[]
   stockMovements StockMovement[]
   inventoryLots  InventoryLot[]
+  attributeValues ProductAttributeValue[]
+  bomItems       BomItem[]   @relation("BomComponentProduct")
+  boms           BillOfMaterial[]
 
   @@map("products")
 }
@@ -226,6 +231,8 @@ model ProductVariant {
   inventoryTransactions InventoryTransaction[]
   priceListItems        PriceListItem[]
   salesReturnItems      SalesReturnItem[]
+  attributeValues       ProductAttributeValue[]
+  workOrderOutputs      WorkOrder[]   @relation("WorkOrderOutputVariant")
 
   @@index([productId])
   @@map("product_variants")
@@ -296,6 +303,8 @@ enum StockMovementType {
   UNRESERVE
   TRANSFER
   ADJUSTMENT
+  CONSUMPTION
+  PRODUCTION
 }
 
 // ─── Invoice (Fatura) ──────────────────────────────────────
@@ -369,6 +378,8 @@ model Account {
   ledgerEntries   LedgerEntry[]
   agency          Agency?
   salesReturns    SalesReturn[]
+  chequesDrawer   Cheque[]      @relation("ChequeDrawer")
+  chequesPayee    Cheque[]      @relation("ChequePayee")
 
   @@unique([branchId, code])
   @@index([branchId])
@@ -472,6 +483,7 @@ model Order {
   invoices          Invoice[]
   payments          Payment[]
   salesReturns      SalesReturn[]
+  workOrders        WorkOrder[]
 
   @@unique([branchId, orderNo])
   @@index([branchId, createdAt])
@@ -646,6 +658,11 @@ enum LedgerType {
   ADJUSTMENT
   COMMISSION
   FX_GAIN_LOSS
+  CHEQUE_RECEIVE
+  CHEQUE_ENDORSE
+  CHEQUE_COLLECT
+  CHEQUE_BOUNCE
+  PRODUCTION
 }
 
 // ─── Documents ──────────────────────────────────────────────
@@ -730,6 +747,8 @@ enum InventoryTransactionType {
   TRANSFER
   ADJUSTMENT
   RETURN
+  CONSUMPTION
+  PRODUCTION
 }
 
 // ─── Price Lists (Fiyat Listeleri) ──────────────────────────
@@ -877,4 +896,386 @@ model DocumentSequence {
   @@unique([branchId, type, year])
   @@index([branchId])
   @@map("document_sequences")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ██  PIM: Product Information Management  ██████████████████████
+// ═══════════════════════════════════════════════════════════════
+
+// ─── Dynamic Product Attributes (EAV relational) ──────────────
+
+model ProductAttribute {
+  id          String  @id @default(cuid())
+  code        String  @unique
+  name        String
+  dataType    AttributeDataType @default(TEXT) @map("data_type")
+  unit        String?           // e.g. "knot/m²", "mm", "dtex"
+  isRequired  Boolean @default(false) @map("is_required")
+  isFilterable Boolean @default(true) @map("is_filterable")
+  options     String[]  @default([]) // predefined values for SELECT type
+  sortOrder   Int     @default(0) @map("sort_order")
+  isActive    Boolean @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  values      ProductAttributeValue[]
+  categories  CategoryAttribute[]
+
+  @@map("product_attributes")
+}
+
+enum AttributeDataType {
+  TEXT
+  NUMBER
+  BOOLEAN
+  SELECT
+  MULTISELECT
+  DATE
+}
+
+model ProductAttributeValue {
+  id          String           @id @default(cuid())
+  attributeId String           @map("attribute_id")
+  attribute   ProductAttribute @relation(fields: [attributeId], references: [id])
+  productId   String           @map("product_id")
+  product     Product          @relation(fields: [productId], references: [id])
+  variantId   String?          @map("variant_id")
+  variant     ProductVariant?  @relation(fields: [variantId], references: [id])
+  valueText   String?          @map("value_text")
+  valueNumber Decimal?         @map("value_number") @db.Decimal(15, 4)
+  valueBool   Boolean?         @map("value_bool")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  @@unique([attributeId, productId, variantId])
+  @@index([productId])
+  @@index([attributeId, valueText])
+  @@index([attributeId, valueNumber])
+  @@map("product_attribute_values")
+}
+
+model ProductCategory {
+  id        String  @id @default(cuid())
+  code      String  @unique
+  name      String
+  parentId  String? @map("parent_id")
+  parent    ProductCategory?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children  ProductCategory[] @relation("CategoryTree")
+  sortOrder Int     @default(0) @map("sort_order")
+  isActive  Boolean @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  attributes CategoryAttribute[]
+
+  @@map("product_categories")
+}
+
+model CategoryAttribute {
+  categoryId  String          @map("category_id")
+  category    ProductCategory @relation(fields: [categoryId], references: [id])
+  attributeId String          @map("attribute_id")
+  attribute   ProductAttribute @relation(fields: [attributeId], references: [id])
+  isRequired  Boolean @default(false) @map("is_required")
+  sortOrder   Int     @default(0) @map("sort_order")
+
+  @@id([categoryId, attributeId])
+  @@map("category_attributes")
+}
+
+// ─── Multi-UoM (Unit of Measure) ──────────────────────────────
+
+model UnitOfMeasure {
+  id          String  @id @default(cuid())
+  code        String  @unique          // "PCS", "M2", "KG", "ROLL", "MTR"
+  name        String                   // "Adet", "Metrekare", "Kilogram", "Top", "Metre"
+  category    UomCategory @default(OTHER) // AREA, WEIGHT, LENGTH, COUNT, VOLUME
+  isBase      Boolean @default(false) @map("is_base")  // base unit for its category
+  isActive    Boolean @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  conversionsFrom UomConversion[] @relation("UomFrom")
+  conversionsTo   UomConversion[] @relation("UomTo")
+
+  @@map("units_of_measure")
+}
+
+enum UomCategory {
+  AREA
+  WEIGHT
+  LENGTH
+  COUNT
+  VOLUME
+  OTHER
+}
+
+model UomConversion {
+  id         String        @id @default(cuid())
+  fromUomId  String        @map("from_uom_id")
+  fromUom    UnitOfMeasure @relation("UomFrom", fields: [fromUomId], references: [id])
+  toUomId    String        @map("to_uom_id")
+  toUom      UnitOfMeasure @relation("UomTo", fields: [toUomId], references: [id])
+  factor     Decimal       @db.Decimal(15, 6) // 1 fromUom = factor * toUom
+  productId  String?       @map("product_id") // NULL = global, non-null = product-specific
+  isActive   Boolean       @default(true) @map("is_active")
+  createdAt  DateTime      @default(now()) @map("created_at")
+
+  @@unique([fromUomId, toUomId, productId])
+  @@map("uom_conversions")
+}
+
+// ─── Variant Dimensions (n-axis variant generator) ────────────
+
+model VariantDimension {
+  id          String  @id @default(cuid())
+  code        String  @unique        // "SIZE", "COLOR", "PATTERN", "EDGE_TYPE"
+  name        String                 // "Ebat", "Renk", "Desen", "Kenar Tipi"
+  sortOrder   Int     @default(0) @map("sort_order")
+  isActive    Boolean @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  values VariantDimensionValue[]
+
+  @@map("variant_dimensions")
+}
+
+model VariantDimensionValue {
+  id          String           @id @default(cuid())
+  dimensionId String           @map("dimension_id")
+  dimension   VariantDimension @relation(fields: [dimensionId], references: [id])
+  code        String
+  label       String           // "200x300", "Kırmızı", "Herati", "Overlok"
+  sortOrder   Int     @default(0) @map("sort_order")
+  isActive    Boolean @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([dimensionId, code])
+  @@map("variant_dimension_values")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ██  FINANCE++: Enterprise Financial Management  ███████████████
+// ═══════════════════════════════════════════════════════════════
+
+// ─── Hierarchical Chart of Accounts (Hesap Planı) ─────────────
+
+model AccountPlan {
+  id          String  @id @default(cuid())
+  code        String  @unique          // "100", "100.01", "100.01.001"
+  name        String                   // "Kasa", "TRY Kasa", "Merkez TRY Kasa"
+  parentId    String? @map("parent_id")
+  parent      AccountPlan?  @relation("AccountPlanTree", fields: [parentId], references: [id])
+  children    AccountPlan[] @relation("AccountPlanTree")
+  level       Int     @default(0)      // depth in tree: 0=top, 1=group, 2=detail
+  accountType AccountPlanType @default(ASSET) @map("account_type")
+  currency    String? // optional constraint on currency
+  isPostable  Boolean @default(false) @map("is_postable") // only leaf nodes can receive entries
+  isActive    Boolean @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([parentId])
+  @@map("account_plans")
+}
+
+enum AccountPlanType {
+  ASSET       // Aktif
+  LIABILITY   // Pasif
+  EQUITY      // Öz Sermaye
+  REVENUE     // Gelir
+  EXPENSE     // Gider
+}
+
+// ─── Cheque / Promissory Note (Çek / Senet) ─────────────────
+
+model Cheque {
+  id            String       @id @default(cuid())
+  chequeNo      String       @unique @map("cheque_no")
+  type          ChequeType   @default(CHEQUE)
+  direction     ChequeDirection @default(RECEIVED)
+  drawerId      String       @map("drawer_id") // who wrote it / who we received from
+  drawer        Account      @relation("ChequeDrawer", fields: [drawerId], references: [id])
+  payeeId       String?      @map("payee_id")  // who it was endorsed to
+  payee         Account?     @relation("ChequePayee", fields: [payeeId], references: [id])
+  branchId      String       @map("branch_id")
+  branch        Branch       @relation(fields: [branchId], references: [id])
+  bankName      String?      @map("bank_name")
+  bankBranch    String?      @map("bank_branch")
+  amount        Decimal      @db.Decimal(15, 2)
+  currency      String       @default("TRY")
+  issueDate     DateTime     @map("issue_date") @db.Date
+  dueDate       DateTime     @map("due_date") @db.Date
+  status        ChequeStatus @default(PORTFOLIO)
+  endorsedTo    String?      @map("endorsed_to") // free text for quick reference
+  bouncedAt     DateTime?    @map("bounced_at")
+  collectedAt   DateTime?    @map("collected_at")
+  isCancelled   Boolean      @default(false) @map("is_cancelled")
+  notes         String?
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  history ChequeHistory[]
+
+  @@index([branchId, dueDate])
+  @@index([drawerId])
+  @@index([status])
+  @@map("cheques")
+}
+
+enum ChequeType {
+  CHEQUE
+  PROMISSORY_NOTE
+}
+
+enum ChequeDirection {
+  RECEIVED   // Alınan
+  GIVEN      // Verilen
+}
+
+enum ChequeStatus {
+  PORTFOLIO    // Portföyde
+  DEPOSITED    // Bankaya teslim
+  ENDORSED     // Ciro edildi
+  COLLATERAL   // Teminata verildi
+  COLLECTED    // Tahsil edildi
+  PAID         // Ödendi (verilen için)
+  BOUNCED      // Karşılıksız
+  CANCELLED    // İptal
+}
+
+model ChequeHistory {
+  id        String       @id @default(cuid())
+  chequeId  String       @map("cheque_id")
+  cheque    Cheque       @relation(fields: [chequeId], references: [id])
+  fromStatus ChequeStatus @map("from_status")
+  toStatus  ChequeStatus @map("to_status")
+  notes     String?
+  performedBy String     @map("performed_by")
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  @@index([chequeId])
+  @@map("cheque_history")
+}
+
+// ─── Cost Centers (Maliyet Merkezleri) ──────────────────────
+
+model CostCenter {
+  id        String  @id @default(cuid())
+  code      String  @unique            // "PROD", "PROD.WEAVE", "PROD.WEAVE.M1"
+  name      String                     // "Üretim", "Dokuma Hattı", "Makine 1"
+  parentId  String? @map("parent_id")
+  parent    CostCenter?  @relation("CostCenterTree", fields: [parentId], references: [id])
+  children  CostCenter[] @relation("CostCenterTree")
+  level     Int     @default(0)
+  isActive  Boolean @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([parentId])
+  @@map("cost_centers")
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ██  MES: Manufacturing Execution System  ██████████████████████
+// ═══════════════════════════════════════════════════════════════
+
+// ─── Bill of Materials (Ürün Reçetesi) ─────────────────────────
+
+model BillOfMaterial {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String                 // "El Dokuma Halı Reçetesi — 200x300"
+  productId   String   @map("product_id")
+  product     Product  @relation(fields: [productId], references: [id])
+  outputQty   Decimal  @default(1) @map("output_qty") @db.Decimal(10, 2) // how many units this BOM produces
+  outputUnit  String   @default("PCS") @map("output_unit")
+  laborHours  Decimal  @default(0) @map("labor_hours") @db.Decimal(10, 2)
+  laborCost   Decimal  @default(0) @map("labor_cost") @db.Decimal(15, 2)
+  overheadCost Decimal @default(0) @map("overhead_cost") @db.Decimal(15, 2)
+  isActive    Boolean  @default(true) @map("is_active")
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  items       BomItem[]
+  workOrders  WorkOrder[]
+
+  @@index([productId])
+  @@map("bill_of_materials")
+}
+
+model BomItem {
+  id          String          @id @default(cuid())
+  bomId       String          @map("bom_id")
+  bom         BillOfMaterial  @relation(fields: [bomId], references: [id])
+  productId   String          @map("product_id")   // component/raw material product
+  product     Product         @relation("BomComponentProduct", fields: [productId], references: [id])
+  quantity    Decimal         @db.Decimal(10, 4)    // amount needed per outputQty
+  unit        String          @default("KG")        // unit of the component
+  wastePct    Decimal         @default(0) @map("waste_pct") @db.Decimal(5, 2) // expected waste %
+  notes       String?
+  sortOrder   Int             @default(0) @map("sort_order")
+
+  @@index([bomId])
+  @@map("bom_items")
+}
+
+// ─── Work Orders (İş Emirleri) ─────────────────────────────────
+
+model WorkOrder {
+  id               String          @id @default(cuid())
+  workOrderNo      String          @unique @map("work_order_no")
+  bomId            String          @map("bom_id")
+  bom              BillOfMaterial  @relation(fields: [bomId], references: [id])
+  orderId          String?         @map("order_id") // linked sales order if any
+  order            Order?          @relation(fields: [orderId], references: [id])
+  branchId         String          @map("branch_id")
+  branch           Branch          @relation(fields: [branchId], references: [id])
+  outputVariantId  String?         @map("output_variant_id")
+  outputVariant    ProductVariant? @relation("WorkOrderOutputVariant", fields: [outputVariantId], references: [id])
+  plannedQty       Decimal         @map("planned_qty") @db.Decimal(10, 2)
+  producedQty      Decimal         @default(0) @map("produced_qty") @db.Decimal(10, 2)
+  wasteQty         Decimal         @default(0) @map("waste_qty") @db.Decimal(10, 2)
+  status           WorkOrderStatus @default(DRAFT)
+  plannedStart     DateTime?       @map("planned_start")
+  plannedEnd       DateTime?       @map("planned_end")
+  actualStart      DateTime?       @map("actual_start")
+  actualEnd        DateTime?       @map("actual_end")
+  costCenterCode   String?         @map("cost_center_code")
+  materialCost     Decimal         @default(0) @map("material_cost") @db.Decimal(15, 2)
+  laborCost        Decimal         @default(0) @map("labor_cost") @db.Decimal(15, 2)
+  overheadCost     Decimal         @default(0) @map("overhead_cost") @db.Decimal(15, 2)
+  totalCost        Decimal         @default(0) @map("total_cost") @db.Decimal(15, 2) // COGM
+  notes            String?
+  isCancelled      Boolean         @default(false) @map("is_cancelled")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  consumptions WorkOrderConsumption[]
+
+  @@index([branchId, status])
+  @@index([orderId])
+  @@index([bomId])
+  @@map("work_orders")
+}
+
+enum WorkOrderStatus {
+  DRAFT
+  RELEASED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model WorkOrderConsumption {
+  id          String    @id @default(cuid())
+  workOrderId String    @map("work_order_id")
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id])
+  productId   String    @map("product_id")  // raw material consumed
+  quantity    Decimal   @db.Decimal(10, 4)
+  unit        String
+  unitCost    Decimal   @default(0) @map("unit_cost") @db.Decimal(15, 2)
+  totalCost   Decimal   @default(0) @map("total_cost") @db.Decimal(15, 2)
+  consumedAt  DateTime  @default(now()) @map("consumed_at")
+
+  @@index([workOrderId])
+  @@map("work_order_consumptions")
 }

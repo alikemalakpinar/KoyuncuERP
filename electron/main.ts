@@ -11,6 +11,9 @@ import { registerPlatinumHandlers } from './ipc/platinum'
 import { registerCashHandlers } from './ipc/cash'
 import { registerReturnHandlers } from './ipc/returns'
 import { registerInvoiceHandlers } from './ipc/invoices'
+import { registerPimHandlers } from './ipc/pim'
+import { registerFinancePlusHandlers } from './ipc/financeplus'
+import { registerMesHandlers } from './ipc/mes'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -51,6 +54,9 @@ async function bootstrap() {
   registerCashHandlers(ipcMain)
   registerReturnHandlers(ipcMain)
   registerInvoiceHandlers(ipcMain)
+  registerPimHandlers(ipcMain)
+  registerFinancePlusHandlers(ipcMain)
+  registerMesHandlers(ipcMain)
 }
 
 app.whenReady().then(async () => {

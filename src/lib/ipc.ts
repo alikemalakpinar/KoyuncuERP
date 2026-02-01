@@ -183,4 +183,52 @@ export const api = {
 
   // Payments
   paymentCreate: (data: any) => ipcCall('payments:create', data),
+
+  // ── PIM ──────────────────────────────────────────────────
+  pimAttributesList: () => ipcCall('pim:attributes:list'),
+  pimAttributesCreate: (data: any) => ipcCall('pim:attributes:create', data),
+  pimAttributesSetValue: (data: any) => ipcCall('pim:attributes:setValue', data),
+  pimAttributesGetProduct: (productId: string) => ipcCall('pim:attributes:getProduct', { productId }),
+  pimCategoriesList: () => ipcCall('pim:categories:list'),
+  pimCategoriesCreate: (data: any) => ipcCall('pim:categories:create', data),
+  pimUomList: (category?: string) => ipcCall('pim:uom:list', { category }),
+  pimUomCreate: (data: any) => ipcCall('pim:uom:create', data),
+  pimUomAddConversion: (data: any) => ipcCall('pim:uom:addConversion', data),
+  pimUomConvert: (qty: number, fromUomCode: string, toUomCode: string, productId?: string) =>
+    ipcCall('pim:uom:convert', { qty, fromUomCode, toUomCode, productId }),
+  pimUomConversions: (productId?: string) => ipcCall('pim:uom:conversions', { productId }),
+  pimDimensionsList: () => ipcCall('pim:dimensions:list'),
+  pimDimensionsCreate: (data: any) => ipcCall('pim:dimensions:create', data),
+  pimDimensionsAddValue: (data: any) => ipcCall('pim:dimensions:addValue', data),
+  pimDimensionsGenerate: (axes: Record<string, string[]>) => ipcCall('pim:dimensions:generate', { axes }),
+
+  // ── Finance++ ────────────────────────────────────────────
+  coaList: () => ipcCall('coa:list'),
+  coaCreate: (data: any) => ipcCall('coa:create', data),
+  coaUpdate: (id: string, data: any) => ipcCall('coa:update', { id, data }),
+  coaTree: () => ipcCall('coa:tree'),
+  chequesList: (filters?: any) => ipcCall('cheques:list', filters),
+  chequesCreate: (data: any) => ipcCall('cheques:create', data),
+  chequesTransition: (data: any) => ipcCall('cheques:transition', data),
+  chequesHistory: (chequeId: string) => ipcCall('cheques:history', { chequeId }),
+  costCentersList: () => ipcCall('costCenters:list'),
+  costCentersCreate: (data: any) => ipcCall('costCenters:create', data),
+  costCentersTree: () => ipcCall('costCenters:tree'),
+  costCentersUpdate: (id: string, data: any) => ipcCall('costCenters:update', { id, data }),
+
+  // ── MES ──────────────────────────────────────────────────
+  bomList: (productId?: string) => ipcCall('bom:list', { productId }),
+  bomGet: (id: string) => ipcCall('bom:get', { id }),
+  bomCreate: (data: any) => ipcCall('bom:create', data),
+  bomCalculateCost: (bomId: string) => ipcCall('bom:calculateCost', { bomId }),
+  workOrdersList: (filters?: any) => ipcCall('workOrders:list', filters),
+  workOrdersGet: (id: string) => ipcCall('workOrders:get', { id }),
+  workOrdersCreate: (data: any) => ipcCall('workOrders:create', data),
+  workOrdersRelease: (id: string) => ipcCall('workOrders:release', { id }),
+  workOrdersStart: (id: string) => ipcCall('workOrders:start', { id }),
+  workOrdersConsume: (workOrderId: string, warehouseId: string) =>
+    ipcCall('workOrders:consume', { workOrderId, warehouseId }),
+  workOrdersComplete: (workOrderId: string, warehouseId: string, producedQty: number, wasteQty?: number) =>
+    ipcCall('workOrders:complete', { workOrderId, warehouseId, producedQty, wasteQty }),
+  workOrdersCancel: (id: string) => ipcCall('workOrders:cancel', { id }),
 }
