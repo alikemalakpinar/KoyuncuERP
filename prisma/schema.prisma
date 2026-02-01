@@ -370,6 +370,10 @@ model Account {
   parentAccount   Account?    @relation("AccountHierarchy", fields: [parentAccountId], references: [id])
   childAccounts   Account[]   @relation("AccountHierarchy")
 
+  // Müşteriyi getiren acente (acente = aracı, müşteri değil)
+  referredByAgencyId String?  @map("referred_by_agency_id")
+  referredByAgency   Agency?  @relation("AgencyReferrals", fields: [referredByAgencyId], references: [id])
+
   // Fiyat listesi
   priceListId     String?     @map("price_list_id")
   priceList       PriceList?  @relation("AccountPriceList", fields: [priceListId], references: [id])
@@ -408,6 +412,7 @@ model Agency {
   staff             AgencyStaff[]
   commissionConfigs CommissionConfig[]
   commissionRecords CommissionRecord[]
+  referredAccounts  Account[]          @relation("AgencyReferrals")
 
   @@map("agencies")
 }

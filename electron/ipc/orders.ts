@@ -73,7 +73,12 @@ export function registerOrderHandlers(ipcMain: IpcMain) {
         where,
         orderBy: { createdAt: 'desc' },
         include: {
-          account: { select: { id: true, code: true, name: true } },
+          account: {
+            select: {
+              id: true, code: true, name: true,
+              referredByAgency: { include: { account: { select: { id: true, name: true } } } },
+            },
+          },
           items: true,
           agencyStaff: { select: { id: true, name: true, agency: { select: { id: true, account: { select: { name: true } } } } } },
         },
