@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Users, Search, Plus, TrendingUp, Clock, AlertTriangle,
@@ -27,6 +28,7 @@ const typeIcons: Record<string, typeof Users> = {
 
 export default function AccountsPage() {
   const { data: accounts = [] } = useAccountsQuery()
+  const navigate = useNavigate()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<string | null>(null)
@@ -165,6 +167,7 @@ export default function AccountsPage() {
                     <tr
                       key={account.id}
                       onClick={() => setSelectedId(account.id)}
+                      onDoubleClick={() => navigate(`/accounts/${account.id}`)}
                       className={`cursor-pointer border-b border-border/50 dark:border-border-dark/50 transition-colors hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary ${
                         selectedId === account.id ? 'bg-brand-50/50 dark:bg-brand-900/10' : ''
                       }`}
@@ -227,6 +230,7 @@ export default function AccountsPage() {
 function AccountInspector({ accountId, account, onClose }: {
   accountId: string; account: any; onClose: () => void
 }) {
+  const nav = useNavigate()
   const { data: health } = useAccountHealthQuery(accountId)
 
   if (!health) {
@@ -337,6 +341,17 @@ function AccountInspector({ accountId, account, onClose }: {
             }`}
           />
         </div>
+      </div>
+
+      {/* Detail Button */}
+      <div className="border-t border-border dark:border-border-dark px-5 py-3">
+        <button
+          onClick={() => nav(`/accounts/${accountId}`)}
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 py-2 text-[13px] font-medium text-white hover:bg-brand-700 transition-colors"
+        >
+          Cari Detayına Git
+          <ChevronRight className="h-3.5 w-3.5" />
+        </button>
       </div>
     </motion.aside>
   )

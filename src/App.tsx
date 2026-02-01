@@ -23,6 +23,7 @@ import QuotationsPage from './pages/QuotationsPage'
 import ShipmentsPage from './pages/ShipmentsPage'
 import SamplesPage from './pages/SamplesPage'
 import ExportDocsPage from './pages/ExportDocsPage'
+import AccountDetailPage from './pages/AccountDetailPage'
 import NewOrderModal from './components/modals/NewOrderModal'
 import NewPaymentModal from './components/modals/NewPaymentModal'
 import { ToastProvider } from './components/Toast'
@@ -141,6 +142,7 @@ function AuthenticatedApp() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/accounts" element={<AccountsPage />} />
+            <Route path="/accounts/:id" element={<AccountDetailPage />} />
             <Route path="/orders" element={<OrdersPage />} />
             <Route path="/inventory" element={<InventoryPage />} />
             <Route path="/inventory/:id" element={<ProductDetailPage />} />

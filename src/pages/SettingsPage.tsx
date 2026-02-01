@@ -30,13 +30,13 @@ interface DemoUser {
 }
 
 const demoUsers: DemoUser[] = [
-  { id: 'u1', name: 'Ahmet Koyuncu', email: 'patron@koyuncu.com', role: 'patron', phone: '+90 532 111 22 33', status: 'active', lastLogin: '30 Oca 2026, 09:15' },
-  { id: 'u2', name: 'Mehmet Yılmaz', email: 'mudur@koyuncu.com', role: 'mudur', phone: '+90 533 222 33 44', status: 'active', lastLogin: '30 Oca 2026, 08:45' },
-  { id: 'u3', name: 'Ayşe Demir', email: 'muhasebe@koyuncu.com', role: 'muhasebeci', phone: '+90 534 333 44 55', status: 'active', lastLogin: '29 Oca 2026, 17:30' },
-  { id: 'u4', name: 'Ali Çelik', email: 'satis@koyuncu.com', role: 'satis_elemani', phone: '+90 535 444 55 66', status: 'active', lastLogin: '30 Oca 2026, 10:20' },
-  { id: 'u5', name: 'John Smith', email: 'acente@koyuncu.com', role: 'acente', phone: '+1 312 555 0147', status: 'active', lastLogin: '28 Oca 2026, 14:00', agency: 'ABC Trading LLC' },
-  { id: 'u6', name: 'Fatma Özkan', email: 'fatma@koyuncu.com', role: 'satis_elemani', phone: '+90 536 555 66 77', status: 'inactive', lastLogin: '15 Oca 2026, 09:00' },
-  { id: 'u7', name: 'David Brown', email: 'david@globalcarpets.com', role: 'acente', phone: '+1 212 555 0199', status: 'active', lastLogin: '27 Oca 2026, 16:45', agency: 'Global Carpets Inc.' },
+  { id: 'u1', name: 'Ahmet Koyuncu', email: 'patron@koyuncu.com', role: 'OWNER', phone: '+90 532 111 22 33', status: 'active', lastLogin: '30 Oca 2026, 09:15' },
+  { id: 'u2', name: 'Mehmet Yılmaz', email: 'mudur@koyuncu.com', role: 'MANAGER', phone: '+90 533 222 33 44', status: 'active', lastLogin: '30 Oca 2026, 08:45' },
+  { id: 'u3', name: 'Ayşe Demir', email: 'muhasebe@koyuncu.com', role: 'ACCOUNTANT', phone: '+90 534 333 44 55', status: 'active', lastLogin: '29 Oca 2026, 17:30' },
+  { id: 'u4', name: 'Ali Çelik', email: 'satis@koyuncu.com', role: 'SALES', phone: '+90 535 444 55 66', status: 'active', lastLogin: '30 Oca 2026, 10:20' },
+  { id: 'u5', name: 'John Smith', email: 'acente@koyuncu.com', role: 'VIEWER', phone: '+1 312 555 0147', status: 'active', lastLogin: '28 Oca 2026, 14:00', agency: 'ABC Trading LLC' },
+  { id: 'u6', name: 'Fatma Özkan', email: 'fatma@koyuncu.com', role: 'SALES', phone: '+90 536 555 66 77', status: 'inactive', lastLogin: '15 Oca 2026, 09:00' },
+  { id: 'u7', name: 'David Brown', email: 'david@globalcarpets.com', role: 'VIEWER', phone: '+1 212 555 0199', status: 'active', lastLogin: '27 Oca 2026, 16:45', agency: 'Global Carpets Inc.' },
 ]
 
 const allPermissions: { key: string; label: string; desc: string }[] = [
@@ -57,19 +57,21 @@ const allPermissions: { key: string; label: string; desc: string }[] = [
 ]
 
 const rolePermsMap: Record<UserRole, string[]> = {
-  patron: allPermissions.map(p => p.key),
-  mudur: ['view_cost_price','view_profit','view_all_agencies','create_invoice','approve_commission','view_reports','edit_stock','view_accounting','view_dashboard_full','export_data'],
-  muhasebeci: ['view_cost_price','view_profit','create_invoice','view_reports','view_accounting','export_data'],
-  satis_elemani: ['create_invoice','view_reports'],
-  acente: ['view_reports'],
+  OWNER: allPermissions.map(p => p.key),
+  ADMIN: allPermissions.map(p => p.key),
+  MANAGER: ['view_cost_price','view_profit','view_all_agencies','create_invoice','approve_commission','view_reports','edit_stock','view_accounting','view_dashboard_full','export_data'],
+  ACCOUNTANT: ['view_cost_price','view_profit','create_invoice','view_reports','view_accounting','export_data'],
+  SALES: ['create_invoice','view_reports'],
+  VIEWER: ['view_reports'],
 }
 
 const roleColorMap: Record<UserRole, string> = {
-  patron: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-  mudur: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-  muhasebeci: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-  satis_elemani: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-  acente: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
+  OWNER: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+  ADMIN: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  MANAGER: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
+  ACCOUNTANT: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
+  SALES: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+  VIEWER: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400',
 }
 
 const statusColor = {
@@ -228,7 +230,7 @@ function UsersTab({ canManage }: { canManage: boolean }) {
 }
 
 function RolesTab() {
-  const roles: UserRole[] = ['patron', 'mudur', 'muhasebeci', 'satis_elemani', 'acente']
+  const roles: UserRole[] = ['OWNER', 'ADMIN', 'MANAGER', 'ACCOUNTANT', 'SALES', 'VIEWER']
 
   return (
     <div className="space-y-4">
