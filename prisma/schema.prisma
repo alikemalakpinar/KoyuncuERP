@@ -809,3 +809,13 @@ model ExchangeRate {
   @@unique([fromCurrency, toCurrency, date])
   @@map("exchange_rates")
 }
+
+// ─── Sequence (Atomic Counters) ──────────────────────────────
+
+model Sequence {
+  id    String @id @default(cuid())
+  key   String @unique          // e.g. "order:IST-2026", "invoice:IST-2026"
+  value Int    @default(0)
+
+  @@map("sequences")
+}
