@@ -84,6 +84,9 @@ function buildBreadcrumbs(pathname: string): { label: string; href: string }[] {
     '/shipments': 'Sevkiyat',
     '/samples': 'Numuneler',
     '/export-docs': 'İhracat Belgeleri',
+    '/cheques': 'Çek / Senet',
+    '/waybills': 'İrsaliyeler',
+    '/cash-book': 'Kasa Defteri',
   }
 
   if (pathname === '/') {

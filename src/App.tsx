@@ -24,6 +24,9 @@ import ShipmentsPage from './pages/ShipmentsPage'
 import SamplesPage from './pages/SamplesPage'
 import ExportDocsPage from './pages/ExportDocsPage'
 import AccountDetailPage from './pages/AccountDetailPage'
+import ChequesPage from './pages/ChequesPage'
+import WaybillsPage from './pages/WaybillsPage'
+import CashBookPage from './pages/CashBookPage'
 import NewOrderModal from './components/modals/NewOrderModal'
 import NewPaymentModal from './components/modals/NewPaymentModal'
 import { ToastProvider } from './components/Toast'
@@ -160,6 +163,9 @@ function AuthenticatedApp() {
             <Route path="/shipments" element={<ShipmentsPage />} />
             <Route path="/samples" element={<SamplesPage />} />
             <Route path="/export-docs" element={<ExportDocsPage />} />
+            <Route path="/cheques" element={<ChequesPage />} />
+            <Route path="/waybills" element={<WaybillsPage />} />
+            <Route path="/cash-book" element={<CashBookPage />} />
           </Routes>
         </AnimatePresence>
       </PageErrorBoundary>

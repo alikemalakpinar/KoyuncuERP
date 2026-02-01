@@ -6,6 +6,7 @@ import {
   FileText, Settings, BarChart3, Handshake, Package,
   Receipt, TrendingUp, Award, LogOut, Activity, Building2,
   ClipboardList, Ship, Palette, Stamp, ChevronsLeft, ChevronsRight,
+  FileCheck, Truck, Wallet,
 } from 'lucide-react'
 import { useAuth, roleLabels, type UserRole } from '../contexts/AuthContext'
 
@@ -64,6 +65,9 @@ export default function Sidebar() {
       title: 'Finans',
       items: [
         { to: '/invoices', icon: Receipt, label: 'Faturalar', show: hasPermission('create_invoice') || hasPermission('view_accounting') },
+        { to: '/waybills', icon: Truck, label: 'İrsaliyeler', show: hasPermission('create_invoice') || hasPermission('view_accounting') },
+        { to: '/cheques', icon: FileCheck, label: 'Çek / Senet', show: hasPermission('view_accounting') },
+        { to: '/cash-book', icon: Wallet, label: 'Kasa Defteri', show: hasPermission('view_accounting') },
         { to: '/commissions', icon: Handshake, label: 'Komisyonlar', show: true },
         { to: '/accounting', icon: BookOpen, label: 'Muhasebe', show: hasPermission('view_accounting') },
       ],
