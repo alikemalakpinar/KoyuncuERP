@@ -38,7 +38,10 @@ const statusDotColors: Record<string, string> = {
 const statusFlow = ['DRAFT', 'CONFIRMED', 'IN_PRODUCTION', 'READY', 'SHIPPED', 'DELIVERED']
 
 type OrderRow = {
-  id: string; orderNo: string; account: { id: string; code: string; name: string }
+  id: string; orderNo: string; account: {
+    id: string; code: string; name: string
+    referredByAgency?: { id: string; account: { id: string; name: string } } | null
+  }
   status: string; currency: string; totalAmount: string; vatAmount: string; grandTotal: string
   agencyCommissionRate: string
   agencyStaff: { name: string; agency: { account: { name: string } } } | null
@@ -90,12 +93,22 @@ export default function OrdersPage() {
       columnHelper.accessor((row) => row.account.name, {
         id: 'customer',
         header: 'Müşteri',
-        cell: (info) => (
-          <div>
-            <p className="font-medium text-gray-900 dark:text-white">{info.getValue()}</p>
-            <p className="text-[11px] text-gray-400 font-mono">{info.row.original.account.code}</p>
-          </div>
-        ),
+        cell: (info) => {
+          const agencyName = info.row.original.account.referredByAgency?.account?.name
+          return (
+            <div>
+              <p className="font-medium text-gray-900 dark:text-white">{info.getValue()}</p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-[11px] text-gray-400 font-mono">{info.row.original.account.code}</span>
+                {agencyName && (
+                  <span className="inline-flex items-center gap-0.5 rounded px-1.5 py-0 text-[10px] font-medium bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-300">
+                    {agencyName}
+                  </span>
+                )}
+              </div>
+            </div>
+          )
+        },
       }),
       columnHelper.accessor('status', {
         header: 'Durum',
@@ -111,10 +124,25 @@ export default function OrdersPage() {
           <span className="tabular-nums font-medium text-gray-900 dark:text-white">${info.getValue()}</span>
         ),
       }),
-      columnHelper.accessor((row) => row.agencyStaff?.agency?.account?.name ?? '–', {
+      columnHelper.accessor((row) => row.agencyStaff?.agency?.account?.name ?? row.account.referredByAgency?.account?.name ?? '–', {
         id: 'agency',
-        header: 'Getiren Acente',
-        cell: (info) => <span className="text-gray-600 dark:text-gray-400">{info.getValue()}</span>,
+        header: 'Acente / Temsilci',
+        cell: (info) => {
+          const staff = info.row.original.agencyStaff
+          const referral = info.row.original.account.referredByAgency?.account?.name
+          if (staff) {
+            return (
+              <div>
+                <p className="text-[12px] font-medium text-purple-700 dark:text-purple-300">{staff.agency.account.name}</p>
+                <p className="text-[11px] text-gray-400">{staff.name}</p>
+              </div>
+            )
+          }
+          if (referral) {
+            return <span className="text-[12px] text-gray-500 dark:text-gray-400">{referral}</span>
+          }
+          return <span className="text-[11px] text-gray-400">Direkt</span>
+        },
       }),
       columnHelper.accessor((row) => row.items?.length ?? 0, {
         id: 'lineCount',
@@ -379,9 +407,15 @@ function OrderInspector({ order, onClose, onNextStatus, onDetail }: {
         <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wider mb-2">Müşteri</p>
         <p className="text-sm font-medium text-gray-900 dark:text-white">{order.account.name}</p>
         <p className="text-[12px] text-gray-500 font-mono">{order.account.code}</p>
+        {order.account.referredByAgency && (
+          <div className="mt-2 flex items-center gap-1.5 rounded-lg bg-purple-50 dark:bg-purple-900/20 px-2.5 py-1.5">
+            <span className="text-[11px] text-purple-600 dark:text-purple-400">Müşterinin Acentesi:</span>
+            <span className="text-[12px] font-medium text-purple-700 dark:text-purple-300">{order.account.referredByAgency.account.name}</span>
+          </div>
+        )}
         {order.agencyStaff && (
-          <div className="mt-3 rounded-xl bg-surface-secondary dark:bg-surface-dark-tertiary p-3">
-            <p className="text-[11px] font-medium text-gray-400">Getiren Acente</p>
+          <div className="mt-2 rounded-xl bg-surface-secondary dark:bg-surface-dark-tertiary p-3">
+            <p className="text-[11px] font-medium text-gray-400">Sipariş Temsilcisi</p>
             <p className="text-[13px] text-gray-900 dark:text-white">{order.agencyStaff.agency.account.name}</p>
             <p className="text-[12px] text-gray-500">Temsilci: {order.agencyStaff.name}</p>
           </div>

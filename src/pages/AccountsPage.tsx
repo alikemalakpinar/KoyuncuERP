@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Users, Search, Plus, TrendingUp, Clock, AlertTriangle,
   Shield, ChevronRight, X, Building2, DollarSign, UserCheck,
-  Globe,
+  Globe, Handshake, Link2,
 } from 'lucide-react'
 import {
   AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid,
@@ -32,33 +32,40 @@ export default function AccountsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<string | null>(null)
+  const [agencyFilter, setAgencyFilter] = useState<string | null>(null)
+
+  // Get list of agencies for filter dropdown
+  const agencies = useMemo(() => {
+    return accounts.filter((a: any) => a.type === 'AGENCY')
+  }, [accounts])
 
   const filtered = useMemo(() => {
     let result = accounts
     if (typeFilter) result = result.filter((a: any) => a.type === typeFilter)
+    if (agencyFilter) {
+      result = result.filter((a: any) => {
+        if (agencyFilter === '__none__') return !a.referredByAgency && a.type !== 'AGENCY'
+        return a.referredByAgency?.account?.name === agencyFilter
+      })
+    }
     if (searchQuery) {
       const q = searchQuery.toLowerCase()
       result = result.filter((a: any) => a.name.toLowerCase().includes(q) || a.code.toLowerCase().includes(q))
     }
     return result
-  }, [accounts, typeFilter, searchQuery])
+  }, [accounts, typeFilter, agencyFilter, searchQuery])
 
   // KPIs
   const kpis = useMemo(() => {
     const total = accounts.length
     const customers = accounts.filter((a: any) => a.type === 'CUSTOMER' || a.type === 'BOTH').length
     const suppliers = accounts.filter((a: any) => a.type === 'SUPPLIER' || a.type === 'BOTH').length
-    const agencies = accounts.filter((a: any) => a.type === 'AGENCY').length
+    const agencyCount = accounts.filter((a: any) => a.type === 'AGENCY').length
+    const withAgency = accounts.filter((a: any) => a.referredByAgency).length
+    const directCustomers = accounts.filter((a: any) => (a.type === 'CUSTOMER' || a.type === 'BOTH') && !a.referredByAgency).length
     const totalBalance = accounts.reduce((s: number, a: any) => s + parseFloat((a.balance || '0').replace(/,/g, '')), 0)
     const overdueCount = accounts.filter((a: any) => parseFloat((a.balance || '0').replace(/,/g, '')) < 0).length
-    return { total, customers, suppliers, agencies, totalBalance, overdueCount }
-  }, [accounts])
-
-  // Type distribution
-  const typeDist = useMemo(() => {
-    const dist: Record<string, number> = {}
-    accounts.forEach((a: any) => { dist[a.type] = (dist[a.type] || 0) + 1 })
-    return Object.entries(dist).sort((a, b) => b[1] - a[1])
+    return { total, customers, suppliers, agencies: agencyCount, withAgency, directCustomers, totalBalance, overdueCount }
   }, [accounts])
 
   return (
@@ -76,12 +83,13 @@ export default function AccountsPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="mb-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="mb-4 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
         {[
           { label: 'Toplam Cari', value: kpis.total, icon: Users, color: 'text-brand-600 bg-brand-50 dark:bg-brand-900/20' },
           { label: 'Müşteri', value: kpis.customers, icon: Building2, color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' },
-          { label: 'Tedarikçi', value: kpis.suppliers, icon: Globe, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/20' },
           { label: 'Acente', value: kpis.agencies, icon: UserCheck, color: 'text-purple-600 bg-purple-50 dark:bg-purple-900/20' },
+          { label: 'Acente ile Gelen', value: kpis.withAgency, icon: Handshake, color: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-900/20' },
+          { label: 'Direkt Müşteri', value: kpis.directCustomers, icon: Link2, color: 'text-teal-600 bg-teal-50 dark:bg-teal-900/20' },
           { label: 'Toplam Bakiye', value: `$${(kpis.totalBalance / 1000).toFixed(0)}K`, icon: DollarSign, color: 'text-green-600 bg-green-50 dark:bg-green-900/20' },
           { label: 'Negatif Bakiye', value: kpis.overdueCount, icon: AlertTriangle, color: kpis.overdueCount > 0 ? 'text-red-600 bg-red-50 dark:bg-red-900/20' : 'text-gray-600 bg-gray-50 dark:bg-gray-800' },
         ].map((kpi) => (
@@ -99,7 +107,7 @@ export default function AccountsPage() {
         ))}
       </div>
 
-      {/* Type Filter Tabs + Search */}
+      {/* Type Filter Tabs + Agency Filter + Search */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1 rounded-xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark p-1">
           <button
@@ -129,6 +137,22 @@ export default function AccountsPage() {
           })}
         </div>
 
+        {/* Agency filter dropdown */}
+        <div className="relative">
+          <select
+            value={agencyFilter ?? ''}
+            onChange={(e) => setAgencyFilter(e.target.value || null)}
+            className="appearance-none rounded-xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark px-3 py-2 pr-8 text-[12px] font-medium text-gray-600 dark:text-gray-300 outline-none cursor-pointer hover:border-brand-400 transition-colors"
+          >
+            <option value="">Tüm Acenteler</option>
+            <option value="__none__">Acentesiz (Direkt)</option>
+            {agencies.map((a: any) => (
+              <option key={a.id} value={a.name}>{a.name}</option>
+            ))}
+          </select>
+          <UserCheck className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none" />
+        </div>
+
         <div className="flex-1 max-w-sm flex items-center gap-2 rounded-xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark-secondary px-3 py-2">
           <Search className="h-4 w-4 text-gray-400" />
           <input
@@ -151,6 +175,7 @@ export default function AccountsPage() {
                   <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Kod</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Ünvan</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Tür</th>
+                  <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Getiren Acente</th>
                   <th className="px-4 py-3 text-left font-medium text-gray-500 dark:text-gray-400">Şehir</th>
                   <th className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">Bakiye</th>
                   <th className="px-4 py-3 text-right font-medium text-gray-500 dark:text-gray-400">Risk Limiti</th>
@@ -161,7 +186,7 @@ export default function AccountsPage() {
               <tbody>
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-16 text-center">
+                    <td colSpan={9} className="px-4 py-16 text-center">
                       <Users className="h-10 w-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
                       <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Cari hesap bulunamadı</p>
                       <p className="text-xs text-gray-400 mt-1">Arama veya filtre kriterlerini değiştirin</p>
@@ -171,6 +196,7 @@ export default function AccountsPage() {
                   const balanceNum = parseFloat((account.balance || '0').replace(/,/g, ''))
                   const limitNum = parseFloat((account.riskLimit || '1').replace(/,/g, ''))
                   const usagePercent = limitNum > 0 ? (balanceNum / limitNum) * 100 : 0
+                  const agencyName = account.referredByAgency?.account?.name
                   return (
                     <tr
                       key={account.id}
@@ -188,6 +214,18 @@ export default function AccountsPage() {
                         <span className={`inline-flex rounded-lg px-2 py-0.5 text-[11px] font-medium ${typeBadgeColors[account.type]}`}>
                           {typeLabels[account.type]}
                         </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {account.type === 'AGENCY' ? (
+                          <span className="text-[11px] text-gray-400 italic">Acente</span>
+                        ) : agencyName ? (
+                          <span className="inline-flex items-center gap-1 rounded-lg bg-purple-50 dark:bg-purple-900/20 px-2 py-0.5 text-[11px] font-medium text-purple-700 dark:text-purple-300">
+                            <UserCheck className="h-3 w-3" />
+                            {agencyName}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-gray-400">Direkt</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{account.city}</td>
                       <td className="px-4 py-3 text-right font-medium tabular-nums">
@@ -255,6 +293,7 @@ function AccountInspector({ accountId, account, onClose }: {
 
   const chartData = health.monthlyRevenue.map((m: any) => ({ name: m.month, gelir: parseInt(m.amount) }))
   const riskColor = health.riskScore >= 70 ? 'text-emerald-600 dark:text-emerald-400' : health.riskScore >= 40 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'
+  const agencyName = account?.referredByAgency?.account?.name
 
   return (
     <motion.aside
@@ -273,6 +312,14 @@ function AccountInspector({ accountId, account, onClose }: {
               {typeLabels[account.type]}
             </span>
           </div>
+          {agencyName && (
+            <div className="mt-2 flex items-center gap-1.5 rounded-lg bg-purple-50 dark:bg-purple-900/20 px-2 py-1">
+              <UserCheck className="h-3 w-3 text-purple-600 dark:text-purple-400" />
+              <span className="text-[11px] font-medium text-purple-700 dark:text-purple-300">
+                Acente: {agencyName}
+              </span>
+            </div>
+          )}
         </div>
         <button onClick={onClose} className="rounded-lg p-1 hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary transition-colors">
           <X className="h-4 w-4 text-gray-400" />

@@ -24,7 +24,10 @@ export function registerAccountHandlers(ipcMain: IpcMain) {
     return ctx.prisma.account.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      include: { agency: true },
+      include: {
+        agency: true,
+        referredByAgency: { include: { account: { select: { id: true, name: true, code: true } } } },
+      },
     })
   }))
 
@@ -33,6 +36,7 @@ export function registerAccountHandlers(ipcMain: IpcMain) {
       where: { id: args.id, branchId: ctx.activeBranchId },
       include: {
         agency: { include: { staff: true, commissionConfigs: true } },
+        referredByAgency: { include: { account: { select: { id: true, name: true, code: true } } } },
         childAccounts: true,
         ledgerEntries: {
           where: { isCancelled: false, branchId: ctx.activeBranchId },
@@ -47,6 +51,7 @@ export function registerAccountHandlers(ipcMain: IpcMain) {
     code: string; name: string; type: string; taxId?: string; phone?: string
     email?: string; address?: string; city?: string; country?: string
     currency?: string; riskLimit?: string; paymentTermDays?: number; parentAccountId?: string
+    referredByAgencyId?: string
   }) => {
     try {
       const account = await ctx.prisma.account.create({
@@ -58,6 +63,7 @@ export function registerAccountHandlers(ipcMain: IpcMain) {
           country: data.country ?? 'TR', currency: data.currency ?? 'USD',
           riskLimit: data.riskLimit ?? '0', paymentTermDays: data.paymentTermDays ?? 30,
           parentAccountId: data.parentAccountId,
+          referredByAgencyId: data.referredByAgencyId,
         },
       })
       await writeAuditLog({
