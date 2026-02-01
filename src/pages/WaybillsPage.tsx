@@ -152,6 +152,7 @@ export default function WaybillsPage() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
   const [detailId, setDetailId] = useState<string | null>(null)
+  const [showCreate, setShowCreate] = useState(false)
 
   const canEdit = hasPermission('create_invoice')
 
@@ -204,7 +205,7 @@ export default function WaybillsPage() {
         <div className="flex items-center gap-2">
           <ExportButton data={filtered} columns={exportColumns} filename="irsaliyeler" />
           {canEdit && (
-            <button className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500 transition-colors">
+            <button onClick={() => setShowCreate(true)} className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500 transition-colors">
               <Plus className="h-4 w-4" />
               Yeni İrsaliye
             </button>

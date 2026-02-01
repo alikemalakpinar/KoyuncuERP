@@ -15,7 +15,7 @@ import {
 import Pagination from '../components/ui/Pagination'
 import ExportButton from '../components/ui/ExportButton'
 import ConfirmDialog from '../components/ui/ConfirmDialog'
-import { useReturnsQuery, useApproveReturn, useCompleteReturn, useCancelReturn } from '../hooks/useIpc'
+import { useReturnsQuery, useApproveReturn, useCompleteReturn, useCancelReturn, useWarehousesQuery } from '../hooks/useIpc'
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -78,6 +78,7 @@ export default function ReturnsPage() {
   const { data: returns = [], isLoading } = useReturnsQuery(
     statusFilter ? { status: statusFilter } : undefined,
   )
+  const { data: warehouses = [] } = useWarehousesQuery()
   const approveReturn = useApproveReturn()
   const completeReturn = useCompleteReturn()
   const cancelReturn = useCancelReturn()
@@ -113,8 +114,8 @@ export default function ReturnsPage() {
     if (confirmAction.type === 'approve') {
       await approveReturn.mutateAsync(confirmAction.id)
     } else if (confirmAction.type === 'complete') {
-      // TODO: Let user pick warehouse — for now use first available
-      await completeReturn.mutateAsync({ id: confirmAction.id, warehouseId: '' })
+      const defaultWarehouse = (warehouses as any[])[0]?.id ?? ''
+      await completeReturn.mutateAsync({ id: confirmAction.id, warehouseId: defaultWarehouse })
     } else if (confirmAction.type === 'cancel') {
       await cancelReturn.mutateAsync({ id: confirmAction.id })
     }

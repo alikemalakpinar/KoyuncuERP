@@ -194,7 +194,7 @@ export default function AccountingPage() {
             <Lock className="h-4 w-4" />
             Dönem Kilitle
           </button>
-          <button className="flex items-center gap-1.5 rounded-xl border border-border dark:border-border-dark px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary transition-colors">
+          <button onClick={() => window.print()} className="flex items-center gap-1.5 rounded-xl border border-border dark:border-border-dark px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary transition-colors">
             <Download className="h-4 w-4" />
             Dışa Aktar
           </button>

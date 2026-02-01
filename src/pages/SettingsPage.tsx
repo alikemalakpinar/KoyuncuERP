@@ -137,6 +137,8 @@ export default function SettingsPage() {
 function UsersTab({ canManage }: { canManage: boolean }) {
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<string>('all')
+  const [showUserModal, setShowUserModal] = useState(false)
+  const handleSave = () => { setShowUserModal(false) }
 
   const filtered = demoUsers.filter(u => {
     if (roleFilter !== 'all' && u.role !== roleFilter) return false
@@ -165,7 +167,7 @@ function UsersTab({ canManage }: { canManage: boolean }) {
           ))}
         </select>
         {canManage && (
-          <button className="flex items-center gap-2 rounded-xl bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 transition-colors">
+          <button onClick={() => setShowUserModal(true)} className="flex items-center gap-2 rounded-xl bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 transition-colors">
             <Plus className="h-4 w-4" /> Yeni Kullanıcı
           </button>
         )}
@@ -211,10 +213,10 @@ function UsersTab({ canManage }: { canManage: boolean }) {
                 {canManage && (
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <button className="rounded-lg p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors">
+                      <button onClick={() => setShowUserModal(true)} className="rounded-lg p-1.5 text-gray-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors">
                         <Edit3 className="h-3.5 w-3.5" />
                       </button>
-                      <button className="rounded-lg p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                      <button onClick={handleSave} className="rounded-lg p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
@@ -326,6 +328,7 @@ function CompanyTab({ canManage }: { canManage: boolean }) {
 }
 
 function CommissionsTab({ canManage }: { canManage: boolean }) {
+  const handleSave = () => { /* placeholder for commission rule creation */ }
   const commissionRules = [
     { agency: 'ABC Trading LLC', rate: 8, staffRate: 3, minOrder: '$5,000', status: 'active' },
     { agency: 'Global Carpets Inc.', rate: 7, staffRate: 2.5, minOrder: '$3,000', status: 'active' },
@@ -354,7 +357,7 @@ function CommissionsTab({ canManage }: { canManage: boolean }) {
         <div className="flex items-center justify-between px-4 py-3 border-b border-border dark:border-border-dark">
           <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Acente Komisyon Oranları</h3>
           {canManage && (
-            <button className="flex items-center gap-1 text-xs text-brand-600 hover:text-brand-700 font-medium">
+            <button onClick={handleSave} className="flex items-center gap-1 text-xs text-brand-600 hover:text-brand-700 font-medium">
               <Plus className="h-3.5 w-3.5" /> Yeni Kural
             </button>
           )}
