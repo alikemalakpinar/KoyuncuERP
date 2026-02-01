@@ -3,10 +3,11 @@ import { Link } from 'react-router-dom'
 import {
   Search, Plus, CreditCard, ChevronRight, Bell, Moon, Sun,
   AlertTriangle, DollarSign, Package, ShoppingCart, CheckCircle,
-  Clock, X,
+  Clock, X, LogOut, Settings, User, Building2, ChevronDown,
+  Wifi, WifiOff, Keyboard,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth, roleLabels, type UserRole } from '../contexts/AuthContext'
 
 interface Props {
   breadcrumbs: { label: string; href: string }[]
@@ -47,14 +48,25 @@ const notifColors = {
   error: 'text-red-500 bg-red-50 dark:bg-red-900/20',
 }
 
+const roleColors: Record<UserRole, string> = {
+  OWNER: 'from-amber-500 to-orange-600',
+  ADMIN: 'from-blue-500 to-indigo-600',
+  MANAGER: 'from-cyan-500 to-blue-600',
+  ACCOUNTANT: 'from-emerald-500 to-teal-600',
+  SALES: 'from-purple-500 to-violet-600',
+  VIEWER: 'from-gray-400 to-gray-500',
+}
+
 export default function Header({ breadcrumbs, onSearchClick, onNewOrder, onNewPayment }: Props) {
-  const { user, hasPermission } = useAuth()
+  const { user, role, activeBranch, hasPermission, logout } = useAuth()
   const [showNotifications, setShowNotifications] = useState(false)
+  const [showProfile, setShowProfile] = useState(false)
   const [notifications, setNotifications] = useState(demoNotifications)
   const [darkMode, setDarkMode] = useState(() =>
     document.documentElement.classList.contains('dark')
   )
   const notifRef = useRef<HTMLDivElement>(null)
+  const profileRef = useRef<HTMLDivElement>(null)
 
   const unreadCount = notifications.filter(n => !n.read).length
 
@@ -71,16 +83,21 @@ export default function Header({ breadcrumbs, onSearchClick, onNewOrder, onNewPa
     setNotifications(notifications.filter(n => n.id !== id))
   }
 
-  // Close on outside click
+  // Close dropdowns on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
         setShowNotifications(false)
       }
+      if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
+        setShowProfile(false)
+      }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
+
+  const initials = user?.fullName?.split(' ').map(n => n[0]).join('') ?? '?'
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-border dark:border-border-dark px-6">
@@ -229,6 +246,94 @@ export default function Header({ breadcrumbs, onSearchClick, onNewOrder, onNewPa
             </button>
           </>
         )}
+
+        {/* Profile Menu */}
+        <div className="relative ml-1" ref={profileRef}>
+          <button
+            onClick={() => setShowProfile(!showProfile)}
+            className="flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary transition-colors"
+          >
+            {user && role && (
+              <div className={`flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br ${roleColors[role]} text-white font-bold text-[10px]`}>
+                {initials}
+              </div>
+            )}
+            <ChevronDown className="h-3 w-3 text-gray-400" />
+          </button>
+
+          <AnimatePresence>
+            {showProfile && (
+              <motion.div
+                initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                transition={{ duration: 0.15 }}
+                className="absolute right-0 top-full mt-2 w-64 rounded-2xl bg-white dark:bg-surface-dark border border-border dark:border-border-dark shadow-xl z-50 overflow-hidden"
+              >
+                {/* User info */}
+                <div className="px-4 py-3 border-b border-border dark:border-border-dark">
+                  <div className="flex items-center gap-3">
+                    {user && role && (
+                      <div className={`flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${roleColors[role]} text-white font-bold text-sm`}>
+                        {initials}
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{user?.fullName}</p>
+                      <p className="text-[11px] text-gray-500">{role ? roleLabels[role] : ''}</p>
+                    </div>
+                  </div>
+                  {activeBranch && (
+                    <div className="mt-2 flex items-center gap-1.5 rounded-lg bg-brand-50 dark:bg-brand-900/20 px-2.5 py-1.5">
+                      <Building2 className="h-3 w-3 text-brand-600 dark:text-brand-400" />
+                      <span className="text-[11px] font-medium text-brand-700 dark:text-brand-300">{activeBranch.branchName}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Connection status */}
+                <div className="px-4 py-2 border-b border-border/50 dark:border-border-dark/50">
+                  <div className="flex items-center gap-2">
+                    <Wifi className="h-3 w-3 text-green-500" />
+                    <span className="text-[11px] text-gray-500">Bağlantı aktif</span>
+                    <span className="ml-auto h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+                  </div>
+                </div>
+
+                {/* Menu items */}
+                <div className="py-1">
+                  <Link
+                    to="/settings"
+                    onClick={() => setShowProfile(false)}
+                    className="flex items-center gap-3 px-4 py-2 text-[13px] text-gray-700 dark:text-gray-300 hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary transition-colors"
+                  >
+                    <Settings className="h-4 w-4 text-gray-400" />
+                    Ayarlar
+                  </Link>
+                  <button
+                    onClick={() => { setShowProfile(false) }}
+                    className="flex w-full items-center gap-3 px-4 py-2 text-[13px] text-gray-700 dark:text-gray-300 hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary transition-colors"
+                  >
+                    <Keyboard className="h-4 w-4 text-gray-400" />
+                    Klavye Kısayolları
+                    <kbd className="ml-auto rounded-md border border-border dark:border-border-dark px-1.5 py-0.5 text-[10px] text-gray-400">?</kbd>
+                  </button>
+                </div>
+
+                {/* Logout */}
+                <div className="border-t border-border dark:border-border-dark py-1">
+                  <button
+                    onClick={() => { setShowProfile(false); logout() }}
+                    className="flex w-full items-center gap-3 px-4 py-2 text-[13px] text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Çıkış Yap
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
     </header>
   )

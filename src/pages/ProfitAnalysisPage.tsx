@@ -50,14 +50,14 @@ export default function ProfitAnalysisPage() {
   }
 
   const totalNetProfit = orders.reduce(
-    (sum, o) => sum + parseFloat(o.netProfit.replace(/,/g, '')),
+    (sum: number, o: any) => sum + parseFloat(o.netProfit.replace(/,/g, '')),
     0,
   )
   const avgMargin =
-    orders.reduce((sum, o) => sum + parseFloat(o.netMargin), 0) / orders.length
+    orders.reduce((sum: number, o: any) => sum + parseFloat(o.netMargin), 0) / orders.length
 
   // Chart data
-  const chartData = orders.map((o) => ({
+  const chartData = orders.map((o: any) => ({
     name: o.orderNo.split('-').pop(),
     kar: parseFloat(o.netProfit.replace(/,/g, '')),
     marj: parseFloat(o.netMargin),
@@ -157,7 +157,7 @@ export default function ProfitAnalysisPage() {
                 formatter={(value: number) => [`$${value.toLocaleString()}`, 'Net Kar']}
               />
               <Bar dataKey="kar" radius={[6, 6, 0, 0]}>
-                {chartData.map((entry, idx) => (
+                {chartData.map((entry: any, idx: number) => (
                   <Cell
                     key={idx}
                     fill={entry.kar > 10000 ? '#40c057' : '#748ffc'}
@@ -227,7 +227,14 @@ export default function ProfitAnalysisPage() {
               </tr>
             </thead>
             <tbody>
-              {sorted.map((order) => (
+              {sorted.length === 0 ? (
+                <tr>
+                  <td colSpan={11} className="px-4 py-16 text-center">
+                    <BarChart3 className="h-10 w-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Analiz edilecek sipariş bulunamadı</p>
+                  </td>
+                </tr>
+              ) : sorted.map((order) => (
                 <tr
                   key={order.orderId}
                   className="border-b border-border/50 dark:border-border-dark/50 hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary transition-colors"

@@ -150,28 +150,50 @@ export default function InvoicePage() {
         )}
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-        <div className="card p-4">
-          <p className="text-xs text-gray-500 mb-1">Satış Faturaları</p>
-          <p className="text-lg font-bold text-gray-900 dark:text-white">{formatCurrency(totals.sales)}</p>
-          <p className="text-xs text-gray-400">{demoInvoices.filter(i => i.type === 'SALES').length} adet</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs text-gray-500 mb-1">Alış Faturaları</p>
-          <p className="text-lg font-bold text-gray-900 dark:text-white">{formatCurrency(totals.purchase)}</p>
-          <p className="text-xs text-gray-400">{demoInvoices.filter(i => i.type === 'PURCHASE').length} adet</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs text-gray-500 mb-1">Vadesi Geçmiş</p>
-          <p className="text-lg font-bold text-red-600">{formatCurrency(totals.overdue)}</p>
-          <p className="text-xs text-red-400">{demoInvoices.filter(i => i.status === 'OVERDUE').length} adet</p>
-        </div>
-        <div className="card p-4">
-          <p className="text-xs text-gray-500 mb-1">Taslak</p>
-          <p className="text-lg font-bold text-gray-900 dark:text-white">{totals.draft}</p>
-          <p className="text-xs text-gray-400">Onay bekliyor</p>
-        </div>
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
+        {[
+          { label: 'Satış Faturaları', value: formatCurrency(totals.sales), sub: `${demoInvoices.filter(i => i.type === 'SALES').length} adet`, icon: FileText, color: 'text-brand-600 bg-brand-50 dark:bg-brand-900/15' },
+          { label: 'Alış Faturaları', value: formatCurrency(totals.purchase), sub: `${demoInvoices.filter(i => i.type === 'PURCHASE').length} adet`, icon: Package, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/15' },
+          { label: 'Vadesi Geçmiş', value: formatCurrency(totals.overdue), sub: `${demoInvoices.filter(i => i.status === 'OVERDUE').length} adet`, icon: AlertCircle, color: 'text-red-600 bg-red-50 dark:bg-red-900/15', valueColor: 'text-red-600' },
+          { label: 'Taslak', value: String(totals.draft), sub: 'Onay bekliyor', icon: Clock, color: 'text-gray-600 bg-gray-100 dark:bg-gray-800' },
+        ].map((kpi) => (
+          <div key={kpi.label} className="card p-4 flex items-center gap-3">
+            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${kpi.color}`}>
+              <kpi.icon className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-[10px] font-medium text-gray-400 uppercase">{kpi.label}</p>
+              <p className={`text-lg font-bold ${kpi.valueColor || 'text-gray-900 dark:text-white'}`}>{kpi.value}</p>
+              <p className="text-[10px] text-gray-400">{kpi.sub}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Status Pipeline */}
+      <div className="flex gap-1 mb-4 rounded-xl bg-surface-secondary dark:bg-surface-dark-secondary p-1">
+        {[
+          { key: 'all' as const, label: 'Tümü', count: demoInvoices.length },
+          ...(['DRAFT', 'FINALIZED', 'SENT', 'PAID', 'OVERDUE'] as InvoiceStatus[]).map(s => ({
+            key: s,
+            label: statusConfig[s].label,
+            count: demoInvoices.filter(i => i.status === s).length,
+          })),
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setStatusFilter(tab.key)}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-medium transition-all ${
+              statusFilter === tab.key
+                ? 'bg-white dark:bg-surface-dark shadow-sm text-gray-900 dark:text-white'
+                : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+            }`}
+          >
+            {tab.label}
+            <span className="text-[10px] text-gray-400 tabular-nums">({tab.count})</span>
+          </button>
+        ))}
       </div>
 
       {/* Filters */}
@@ -195,18 +217,6 @@ export default function InvoicePage() {
           <option value="SALES">Satış Faturaları</option>
           <option value="PURCHASE">Alış Faturaları</option>
         </select>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as any)}
-          className="rounded-xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark-secondary px-3 py-2 text-sm"
-        >
-          <option value="all">Tüm Durumlar</option>
-          <option value="DRAFT">Taslak</option>
-          <option value="FINALIZED">Kesildi</option>
-          <option value="SENT">Gönderildi</option>
-          <option value="PAID">Ödendi</option>
-          <option value="OVERDUE">Vadesi Geçmiş</option>
-        </select>
       </div>
 
       {/* Invoices Table */}
@@ -227,7 +237,15 @@ export default function InvoicePage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((inv) => {
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={10} className="px-4 py-16 text-center">
+                  <FileText className="h-10 w-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Fatura bulunamadı</p>
+                  <p className="text-xs text-gray-400 mt-1">Filtreleri değiştirerek tekrar deneyin</p>
+                </td>
+              </tr>
+            ) : filtered.map((inv) => {
               const sc = statusConfig[inv.status]
               return (
                 <tr key={inv.id} className="border-b border-border/50 dark:border-border-dark/50 hover:bg-surface-secondary/30 dark:hover:bg-surface-dark-secondary/30">

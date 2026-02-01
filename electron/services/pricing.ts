@@ -9,7 +9,9 @@
  * - Fallback to variant listPrice
  */
 
-import type { DbClient } from '../db'
+import type { PrismaClient } from '@prisma/client'
+
+type DbClient = PrismaClient
 
 // ── Types ──────────────────────────────────────────────────
 
