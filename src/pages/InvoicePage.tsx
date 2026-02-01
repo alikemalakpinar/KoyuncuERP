@@ -317,10 +317,10 @@ export default function InvoicePage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button className="rounded-lg p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-surface-dark-secondary">
+                  <button onClick={() => window.print()} className="rounded-lg p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-surface-dark-secondary" title="Yazdır">
                     <Printer className="h-4 w-4" />
                   </button>
-                  <button className="rounded-lg p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-surface-dark-secondary">
+                  <button onClick={() => window.print()} className="rounded-lg p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-surface-dark-secondary" title="İndir">
                     <Download className="h-4 w-4" />
                   </button>
                   <button
@@ -419,6 +419,7 @@ export default function InvoicePage() {
 }
 
 function CreateInvoiceModal({ onClose }: { onClose: () => void }) {
+  const [saving, setSaving] = useState(false)
   const [type, setType] = useState<InvoiceType>('SALES')
   const [items, setItems] = useState<{ productName: string; quantity: number; unitPrice: number; vatRate: number }[]>([
     { productName: '', quantity: 1, unitPrice: 0, vatRate: 18 },
@@ -626,10 +627,18 @@ function CreateInvoiceModal({ onClose }: { onClose: () => void }) {
             <button onClick={onClose} className="px-4 py-2 rounded-xl border border-border dark:border-border-dark text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary">
               İptal
             </button>
-            <button className="px-4 py-2 rounded-xl bg-gray-600 text-sm font-medium text-white hover:bg-gray-700">
+            <button
+              onClick={() => { setSaving(true); setTimeout(() => { setSaving(false); onClose() }, 500) }}
+              disabled={saving}
+              className="px-4 py-2 rounded-xl bg-gray-600 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+            >
               Taslak Kaydet
             </button>
-            <button className="px-4 py-2 rounded-xl bg-brand-600 text-sm font-medium text-white hover:bg-brand-700">
+            <button
+              onClick={() => { setSaving(true); setTimeout(() => { setSaving(false); onClose() }, 500) }}
+              disabled={saving}
+              className="px-4 py-2 rounded-xl bg-brand-600 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+            >
               Faturayı Oluştur
             </button>
           </div>

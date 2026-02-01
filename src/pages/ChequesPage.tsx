@@ -179,7 +179,10 @@ export default function ChequesPage() {
         <div className="flex items-center gap-2">
           <ExportButton data={filtered} columns={exportColumns} filename="cek-senet" />
           {canEdit && (
-            <button className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500 transition-colors">
+            <button
+              onClick={() => setConfirmAction({ id: '', action: 'create' })}
+              className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-500 transition-colors"
+            >
               <Plus className="h-4 w-4" />
               Yeni Çek/Senet
             </button>
@@ -288,13 +291,13 @@ export default function ChequesPage() {
             className="mb-3 flex items-center gap-3 rounded-xl bg-brand-50 dark:bg-brand-900/15 border border-brand-200 dark:border-brand-800/30 px-4 py-2.5"
           >
             <span className="text-sm font-medium text-brand-700 dark:text-brand-300">{selectedIds.size} seçili</span>
-            <button className="flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-800 transition-colors">
+            <button onClick={() => setConfirmAction({ id: [...selectedIds].join(','), action: 'endorse' })} className="flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-800 transition-colors">
               <ArrowRightLeft className="h-3 w-3" /> Ciro Et
             </button>
-            <button className="flex items-center gap-1 text-xs font-medium text-green-600 hover:text-green-800 transition-colors">
+            <button onClick={() => setConfirmAction({ id: [...selectedIds].join(','), action: 'collect' })} className="flex items-center gap-1 text-xs font-medium text-green-600 hover:text-green-800 transition-colors">
               <CheckCircle className="h-3 w-3" /> Tahsil Edildi
             </button>
-            <button className="flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-800 transition-colors">
+            <button onClick={() => setConfirmAction({ id: [...selectedIds].join(','), action: 'return' })} className="flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-800 transition-colors">
               <RotateCcw className="h-3 w-3" /> İade
             </button>
             <button onClick={() => setSelectedIds(new Set())} className="ml-auto text-xs text-gray-500 hover:text-gray-700">
@@ -401,7 +404,7 @@ export default function ChequesPage() {
                     </td>
                     <td className="px-4 py-1">
                       {canEdit && ['PORTFOLIO', 'DEPOSITED'].includes(c.status) && (
-                        <button className="p-1 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                        <button onClick={() => setConfirmAction({ id: c.id, action: 'action' })} className="p-1 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                           <ChevronDown className="h-4 w-4" />
                         </button>
                       )}

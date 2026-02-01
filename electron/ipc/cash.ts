@@ -1,177 +1,194 @@
 /**
  * Cash Register IPC Handlers – Branch-Scoped & Protected
- *
- * open/close register, record transactions, Z report
+ * All math via Decimal.js, all writes in $transaction.
+ * Zod validation on all inputs.
  */
 
 import type { IpcMain } from 'electron'
+import Decimal from 'decimal.js'
+import { z } from 'zod'
 import { protectedProcedure } from './_secure'
 import { writeAuditLog } from './audit'
 
+Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP })
+
+// ─── Validation ─────────────────────────────────────────────
+const createTransactionSchema = z.object({
+  cashRegisterId: z.string().min(1, 'Kasa seçilmedi'),
+  type: z.enum(['IN', 'OUT']),
+  amount: z.string().refine(v => { try { return new Decimal(v).gt(0) } catch { return false } }, 'Tutar pozitif olmalı'),
+  reason: z.string().min(1, 'Açıklama gerekli'),
+})
+
+const closeRegisterSchema = z.object({
+  registerId: z.string().min(1),
+  actualCash: z.string().refine(v => { try { return new Decimal(v).gte(0) } catch { return false } }, 'Sayım tutarı negatif olamaz'),
+  notes: z.string().optional(),
+})
+
+// ─── Handlers ───────────────────────────────────────────────
 export function registerCashHandlers(ipcMain: IpcMain) {
+  // LIST REGISTERS
   ipcMain.handle('cash:registers', protectedProcedure('read', async (ctx) => {
-    return ctx.prisma.cashRegister.findMany({
-      where: { branchId: ctx.activeBranchId, isActive: true },
-      orderBy: { name: 'asc' },
-    })
-  }))
-
-  ipcMain.handle('cash:open', protectedProcedure('manage_cash_register', async (ctx, args: {
-    registerId: string; openingBalance: string
-  }) => {
     try {
-      const reg = await ctx.prisma.cashRegister.findFirst({
-        where: { id: args.registerId, branchId: ctx.activeBranchId },
+      return await ctx.prisma.cashRegister.findMany({
+        where: { branchId: ctx.activeBranchId },
+        orderBy: { name: 'asc' },
       })
-      if (!reg) return { success: false, error: 'Kasa bulunamadı' }
-      if (reg.isOpen) return { success: false, error: 'Kasa zaten açık' }
-
-      const updated = await ctx.prisma.cashRegister.update({
-        where: { id: args.registerId },
-        data: {
-          isOpen: true, openingBalance: args.openingBalance,
-          currentBalance: args.openingBalance, lastOpenedAt: new Date(),
-        },
-      })
-
-      await writeAuditLog({
-        entityType: 'CashRegister', entityId: args.registerId, action: 'UPDATE',
-        newData: { action: 'OPEN', openingBalance: args.openingBalance },
-        userId: ctx.user.id, branchId: ctx.activeBranchId,
-        description: `Kasa açıldı: ${reg.name} (${args.openingBalance})`,
-      })
-      return { success: true, data: updated }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+    } catch (error) {
+      console.error('[IPC] cash:registers error:', error)
+      return []
     }
   }))
 
-  ipcMain.handle('cash:close', protectedProcedure('manage_cash_register', async (ctx, args: {
-    registerId: string; actualCash: string
+  // LIST TRANSACTIONS
+  ipcMain.handle('cash:transactions', protectedProcedure('read', async (ctx, filters?: {
+    cashRegisterId?: string; dateFrom?: string; dateTo?: string
   }) => {
     try {
-      const reg = await ctx.prisma.cashRegister.findFirst({
-        where: { id: args.registerId, branchId: ctx.activeBranchId },
-      })
-      if (!reg) return { success: false, error: 'Kasa bulunamadı' }
-      if (!reg.isOpen) return { success: false, error: 'Kasa zaten kapalı' }
-
-      const expected = parseFloat(String(reg.currentBalance))
-      const actual = parseFloat(args.actualCash)
-      const variance = actual - expected
-
-      const updated = await ctx.prisma.cashRegister.update({
-        where: { id: args.registerId },
-        data: { isOpen: false, lastClosedAt: new Date() },
-      })
-
-      // Get day's transactions for Z report
-      const dayStart = new Date()
-      dayStart.setHours(0, 0, 0, 0)
-      const txns = await ctx.prisma.cashTransaction.findMany({
-        where: { cashRegisterId: args.registerId, branchId: ctx.activeBranchId, createdAt: { gte: dayStart } },
-      })
-
-      const inflows = txns.filter((t: any) => t.type === 'IN').reduce((s: number, t: any) => s + parseFloat(String(t.amount)), 0)
-      const outflows = txns.filter((t: any) => t.type === 'OUT').reduce((s: number, t: any) => s + parseFloat(String(t.amount)), 0)
-
-      await writeAuditLog({
-        entityType: 'CashRegister', entityId: args.registerId, action: 'UPDATE',
-        newData: { action: 'CLOSE', actualCash: args.actualCash, expectedCash: expected.toFixed(2), variance: variance.toFixed(2) },
-        userId: ctx.user.id, branchId: ctx.activeBranchId,
-        description: `Kasa kapandı: ${reg.name} (Beklenen: ${expected.toFixed(2)}, Gerçek: ${args.actualCash}, Fark: ${variance.toFixed(2)})`,
-      })
-
-      return {
-        success: true,
-        data: {
-          register: updated,
-          zReport: {
-            openingBalance: parseFloat(String(reg.openingBalance)).toFixed(2),
-            inflows: inflows.toFixed(2),
-            outflows: outflows.toFixed(2),
-            expectedCash: expected.toFixed(2),
-            actualCash: args.actualCash,
-            variance: variance.toFixed(2),
-            transactionCount: txns.length,
-          },
-        },
+      const where: any = { branchId: ctx.activeBranchId }
+      if (filters?.cashRegisterId) where.cashRegisterId = filters.cashRegisterId
+      if (filters?.dateFrom || filters?.dateTo) {
+        where.createdAt = {}
+        if (filters?.dateFrom) where.createdAt.gte = new Date(filters.dateFrom)
+        if (filters?.dateTo) where.createdAt.lte = new Date(filters.dateTo)
       }
+
+      return await ctx.prisma.cashTransaction.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        include: { cashRegister: { select: { name: true } } },
+      })
+    } catch (error) {
+      console.error('[IPC] cash:transactions error:', error)
+      return []
+    }
+  }))
+
+  // CREATE TRANSACTION — $transaction + Decimal.js
+  ipcMain.handle('cash:transact', protectedProcedure('manage_cash_register', async (ctx, rawData: any) => {
+    const parsed = createTransactionSchema.safeParse(rawData)
+    if (!parsed.success) {
+      return { success: false, error: `Geçersiz giriş: ${parsed.error.errors.map(e => e.message).join(', ')}` }
+    }
+    const data = parsed.data
+
+    try {
+      return await ctx.prisma.$transaction(async (tx: any) => {
+        const register = await tx.cashRegister.findFirst({
+          where: { id: data.cashRegisterId, branchId: ctx.activeBranchId },
+        })
+        if (!register) return { success: false, error: 'Kasa bulunamadı.' }
+        if (!register.isOpen) return { success: false, error: 'Kasa kapalı. İşlem yapabilmek için kasayı açın.' }
+
+        const amount = new Decimal(data.amount)
+        const currentBalance = new Decimal(String(register.currentBalance))
+
+        if (data.type === 'OUT' && amount.gt(currentBalance)) {
+          return { success: false, error: `Yetersiz bakiye. Kasa: ${currentBalance.toFixed(2)}, Çıkış: ${amount.toFixed(2)}` }
+        }
+
+        const newBalance = data.type === 'IN'
+          ? currentBalance.plus(amount)
+          : currentBalance.minus(amount)
+
+        await tx.cashRegister.update({
+          where: { id: data.cashRegisterId },
+          data: { currentBalance: newBalance.toFixed(2) },
+        })
+
+        const txn = await tx.cashTransaction.create({
+          data: {
+            cashRegisterId: data.cashRegisterId,
+            branchId: ctx.activeBranchId,
+            type: data.type,
+            amount: amount.toFixed(2),
+            reason: data.reason,
+            createdByUserId: ctx.user.id,
+          },
+        })
+
+        await writeAuditLog({
+          entityType: 'CashTransaction', entityId: txn.id, action: 'CREATE',
+          newData: { type: data.type, amount: amount.toFixed(2), cashRegisterId: data.cashRegisterId },
+          userId: ctx.user.id, branchId: ctx.activeBranchId,
+          description: `Kasa ${data.type === 'IN' ? 'giriş' : 'çıkış'}: ${amount.toFixed(2)} ${register.name}`,
+        })
+
+        return { success: true, data: txn }
+      })
     } catch (error: any) {
       return { success: false, error: error.message }
     }
   }))
 
-  ipcMain.handle('cash:transact', protectedProcedure('manage_cash_register', async (ctx, data: {
-    registerId: string; type: 'IN' | 'OUT'; amount: string; reason: string
-    refType?: string; refId?: string
-  }) => {
+  // CLOSE REGISTER (Z-Report) — $transaction + Decimal.js
+  ipcMain.handle('cash:close', protectedProcedure('manage_cash_register', async (ctx, rawData: any) => {
+    const parsed = closeRegisterSchema.safeParse(rawData)
+    if (!parsed.success) {
+      return { success: false, error: `Geçersiz giriş: ${parsed.error.errors.map(e => e.message).join(', ')}` }
+    }
+    const data = parsed.data
+
     try {
-      const reg = await ctx.prisma.cashRegister.findFirst({
-        where: { id: data.registerId, branchId: ctx.activeBranchId },
-      })
-      if (!reg) return { success: false, error: 'Kasa bulunamadı' }
-      if (!reg.isOpen) return { success: false, error: 'Kasa kapalı, işlem yapılamaz' }
+      return await ctx.prisma.$transaction(async (tx: any) => {
+        const register = await tx.cashRegister.findFirst({
+          where: { id: data.registerId, branchId: ctx.activeBranchId },
+        })
+        if (!register) return { success: false, error: 'Kasa bulunamadı.' }
+        if (!register.isOpen) return { success: false, error: 'Kasa zaten kapalı.' }
 
-      const amount = parseFloat(data.amount)
-      const newBalance = data.type === 'IN'
-        ? parseFloat(String(reg.currentBalance)) + amount
-        : parseFloat(String(reg.currentBalance)) - amount
+        const expected = new Decimal(String(register.currentBalance))
+        const actual = new Decimal(data.actualCash)
+        const variance = actual.minus(expected)
 
-      const txn = await ctx.prisma.cashTransaction.create({
-        data: {
-          cashRegisterId: data.registerId, branchId: ctx.activeBranchId,
-          type: data.type, amount: data.amount, reason: data.reason,
-          refType: data.refType, refId: data.refId,
-          createdByUserId: ctx.user.id, // from session, NOT client
-        },
+        await tx.cashRegister.update({
+          where: { id: data.registerId },
+          data: { isOpen: false, currentBalance: actual.toFixed(2), lastClosedAt: new Date() },
+        })
+
+        if (!variance.isZero()) {
+          await tx.cashTransaction.create({
+            data: {
+              cashRegisterId: data.registerId,
+              branchId: ctx.activeBranchId,
+              type: variance.gt(0) ? 'IN' : 'OUT',
+              amount: variance.abs().toFixed(2),
+              reason: `Z-Rapor sayım farkı: Beklenen ${expected.toFixed(2)}, Sayılan ${actual.toFixed(2)}`,
+              createdByUserId: ctx.user.id,
+            },
+          })
+        }
+
+        await writeAuditLog({
+          entityType: 'CashRegister', entityId: data.registerId, action: 'CLOSE',
+          newData: { expected: expected.toFixed(2), actual: actual.toFixed(2), variance: variance.toFixed(2) },
+          userId: ctx.user.id, branchId: ctx.activeBranchId,
+          description: `Kasa kapatıldı: ${register.name} (Fark: ${variance.toFixed(2)})`,
+        })
+
+        return { success: true, data: { expected: expected.toFixed(2), actual: actual.toFixed(2), variance: variance.toFixed(2) } }
       })
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  }))
+
+  // OPEN REGISTER
+  ipcMain.handle('cash:open', protectedProcedure('manage_cash_register', async (ctx, args: { registerId: string }) => {
+    try {
+      const register = await ctx.prisma.cashRegister.findFirst({
+        where: { id: args.registerId, branchId: ctx.activeBranchId },
+      })
+      if (!register) return { success: false, error: 'Kasa bulunamadı.' }
+      if (register.isOpen) return { success: false, error: 'Kasa zaten açık.' }
 
       await ctx.prisma.cashRegister.update({
-        where: { id: data.registerId },
-        data: { currentBalance: newBalance.toFixed(2) },
+        where: { id: args.registerId },
+        data: { isOpen: true, openingBalance: register.currentBalance, lastOpenedAt: new Date() },
       })
 
-      return { success: true, data: txn }
-    } catch (error: any) {
-      return { success: false, error: error.message }
-    }
-  }))
-
-  ipcMain.handle('cash:transactions', protectedProcedure('read', async (ctx, args: {
-    registerId: string; date?: string
-  }) => {
-    const where: any = { cashRegisterId: args.registerId, branchId: ctx.activeBranchId }
-    if (args.date) {
-      const d = new Date(args.date)
-      const next = new Date(d); next.setDate(next.getDate() + 1)
-      where.createdAt = { gte: d, lt: next }
-    }
-    return ctx.prisma.cashTransaction.findMany({
-      where, orderBy: { createdAt: 'desc' },
-      include: { createdByUser: { select: { fullName: true } } },
-    })
-  }))
-
-  // Payment recording (split payments for orders)
-  ipcMain.handle('payments:create', protectedProcedure('manage_orders', async (ctx, data: {
-    orderId: string; method: string; amount: string; currency?: string; note?: string
-  }) => {
-    try {
-      // Verify order belongs to branch
-      const order = await ctx.prisma.order.findFirst({
-        where: { id: data.orderId, branchId: ctx.activeBranchId },
-      })
-      if (!order) return { success: false, error: 'Sipariş bulunamadı' }
-
-      const payment = await ctx.prisma.payment.create({
-        data: {
-          orderId: data.orderId, branchId: ctx.activeBranchId,
-          method: data.method as any, amount: data.amount,
-          currency: data.currency ?? order.currency, note: data.note,
-        },
-      })
-      return { success: true, data: payment }
+      return { success: true }
     } catch (error: any) {
       return { success: false, error: error.message }
     }

@@ -4,7 +4,7 @@ import {
   DollarSign, TrendingUp, Truck, AlertCircle, ArrowUpRight,
   ArrowDownRight, ShoppingCart, Users, Package, Ship, Clock,
   CheckCircle, AlertTriangle, ArrowRight, Palette, FileText,
-  CreditCard, Plus, Activity, XCircle, Sparkles,
+  CreditCard, Plus, Activity, XCircle, Sparkles, Wallet, PackageX,
 } from 'lucide-react'
 import {
   AreaChart, Area, ResponsiveContainer, BarChart, Bar,
@@ -107,6 +107,8 @@ export default function Dashboard() {
   const shipmentNote = kpis?.shipmentNote ?? '3 acil'
   const overdueAmount = kpis?.overdueAmount ?? '$42,180'
   const overdueChange = kpis?.overdueChange ?? '-8.1%'
+  const cashBalance = kpis?.cashBalance ? `$${Number(kpis.cashBalance).toLocaleString()}` : '$126,450'
+  const criticalStockCount = kpis?.criticalStockCount ?? 3
 
   const greeting = (() => {
     const h = new Date().getHours()
@@ -171,11 +173,13 @@ export default function Dashboard() {
       </motion.div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <KpiCard title="Aylık Gelir" value={revenue} change={revenueChange} changeType="positive" icon={DollarSign} delay={0} chart={<MiniArea data={defaultChartData} color="#4c6ef5" />} />
         <KpiCard title="Tahsilat Oranı" value={collectionRate} change={collectionChange} changeType="positive" icon={TrendingUp} delay={1} chart={<MiniArea data={defaultChartData.slice(0, 8)} color="#40c057" />} />
         <KpiCard title="Bekleyen Sevkiyat" value={pendingShipments} change={shipmentNote} changeType="neutral" icon={Truck} delay={2} chart={<MiniBar data={defaultChartData.slice(0, 8)} color="#748ffc" />} />
         <KpiCard title="Vadesi Geçen" value={overdueAmount} change={overdueChange} changeType="negative" icon={AlertCircle} delay={3} chart={<MiniBar data={defaultChartData.slice(0, 8)} color="#fa5252" />} />
+        <KpiCard title="Kasa Bakiyesi" value={cashBalance} change="Toplam" changeType="neutral" icon={Wallet} delay={4} chart={<MiniArea data={defaultChartData.slice(0, 8)} color="#f59e0b" />} />
+        <KpiCard title="Kritik Stok" value={String(criticalStockCount)} change={criticalStockCount > 0 ? 'Dikkat' : 'Normal'} changeType={criticalStockCount > 0 ? 'negative' : 'positive'} icon={PackageX} delay={5} chart={<MiniBar data={defaultChartData.slice(0, 8)} color="#e64980" />} />
       </div>
 
       {/* Bento Grid: 3 columns */}

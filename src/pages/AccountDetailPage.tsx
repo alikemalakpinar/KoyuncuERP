@@ -19,7 +19,7 @@ import {
   AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid,
   BarChart, Bar,
 } from 'recharts'
-import { useAccountsQuery, useAccountHealthQuery } from '../hooks/useIpc'
+import { useAccountsQuery, useAccountHealthQuery, useAccountStatement } from '../hooks/useIpc'
 
 // ── Tabs ───────────────────────────────────────────────────
 const tabs = [
@@ -229,8 +229,11 @@ export default function AccountDetailPage() {
   const [activeTab, setActiveTab] = useState<TabId>('overview')
   const [showComposer, setShowComposer] = useState(false)
   const [composerTemplate, setComposerTemplate] = useState<EmailTemplate | null>(null)
+  const [statementFrom, setStatementFrom] = useState('')
+  const [statementTo, setStatementTo] = useState('')
   const { data: accounts = [] } = useAccountsQuery()
   const { data: health } = useAccountHealthQuery(id ?? null)
+  const { data: statement, isLoading: statementLoading } = useAccountStatement(id ?? '', statementFrom || undefined, statementTo || undefined)
 
   const account = useMemo(() => accounts.find((a: any) => a.id === id), [accounts, id])
 
@@ -460,45 +463,86 @@ export default function AccountDetailPage() {
         {/* ─── LEDGER ─── */}
         {activeTab === 'ledger' && (
           <motion.div key="ledger" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
-            <div className="grid grid-cols-3 gap-3">
+            {/* Date Filters */}
+            <div className="flex items-center gap-3">
+              <div>
+                <label className="text-[10px] font-medium text-gray-400 uppercase">Başlangıç</label>
+                <input type="date" value={statementFrom} onChange={(e) => setStatementFrom(e.target.value)}
+                  className="mt-1 block w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white" />
+              </div>
+              <div>
+                <label className="text-[10px] font-medium text-gray-400 uppercase">Bitiş</label>
+                <input type="date" value={statementTo} onChange={(e) => setStatementTo(e.target.value)}
+                  className="mt-1 block w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-white" />
+              </div>
+              {(statementFrom || statementTo) && (
+                <button onClick={() => { setStatementFrom(''); setStatementTo('') }}
+                  className="mt-5 rounded-lg p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Summary */}
+            <div className="grid grid-cols-4 gap-3">
+              <div className="card p-4 text-center">
+                <p className="text-[10px] font-medium text-gray-400 uppercase">Açılış Bakiye</p>
+                <p className="text-lg font-bold text-gray-900 dark:text-white">${statement?.openingBalance ? Number(statement.openingBalance).toLocaleString() : '0'}</p>
+              </div>
               <div className="card p-4 text-center">
                 <p className="text-[10px] font-medium text-gray-400 uppercase">Toplam Borç</p>
-                <p className="text-lg font-bold text-red-500">${totalDebit.toLocaleString()}</p>
+                <p className="text-lg font-bold text-red-500">${statement?.totalDebit ? Number(statement.totalDebit).toLocaleString() : totalDebit.toLocaleString()}</p>
               </div>
               <div className="card p-4 text-center">
                 <p className="text-[10px] font-medium text-gray-400 uppercase">Toplam Alacak</p>
-                <p className="text-lg font-bold text-emerald-600">${totalCredit.toLocaleString()}</p>
+                <p className="text-lg font-bold text-emerald-600">${statement?.totalCredit ? Number(statement.totalCredit).toLocaleString() : totalCredit.toLocaleString()}</p>
               </div>
               <div className="card p-4 text-center">
-                <p className="text-[10px] font-medium text-gray-400 uppercase">Bakiye</p>
-                <p className="text-lg font-bold text-gray-900 dark:text-white">${account.balance}</p>
+                <p className="text-[10px] font-medium text-gray-400 uppercase">Kapanış Bakiye</p>
+                <p className="text-lg font-bold text-gray-900 dark:text-white">${statement?.closingBalance ? Number(statement.closingBalance).toLocaleString() : account.balance}</p>
               </div>
             </div>
+
+            {/* Entries */}
             <div className="card overflow-hidden">
-              <table className="w-full text-[12px]">
-                <thead>
-                  <tr className="border-b border-border dark:border-border-dark bg-surface-secondary/50 dark:bg-surface-dark-tertiary/50">
-                    <th className="text-left font-medium text-gray-400 px-5 py-2.5">Tarih</th>
-                    <th className="text-left font-medium text-gray-400 px-3 py-2.5">Referans</th>
-                    <th className="text-left font-medium text-gray-400 px-3 py-2.5">Açıklama</th>
-                    <th className="text-right font-medium text-red-400 px-3 py-2.5">Borç</th>
-                    <th className="text-right font-medium text-emerald-500 px-3 py-2.5">Alacak</th>
-                    <th className="text-right font-medium text-gray-400 px-5 py-2.5">Bakiye</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/30 dark:divide-border-dark/30">
-                  {demoLedger.map((entry) => (
-                    <tr key={entry.id} className="hover:bg-surface-secondary/40 dark:hover:bg-surface-dark-tertiary/40 transition-colors">
-                      <td className="px-5 py-2.5 text-gray-500 tabular-nums">{new Date(entry.date).toLocaleDateString('tr-TR')}</td>
-                      <td className="px-3 py-2.5"><span className="font-medium text-brand-600 dark:text-brand-400">{entry.ref}</span></td>
-                      <td className="px-3 py-2.5 text-gray-600 dark:text-gray-400">{entry.desc}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{entry.debit > 0 ? <span className="text-red-500 font-medium">${entry.debit.toLocaleString()}</span> : <span className="text-gray-300 dark:text-gray-600">—</span>}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{entry.credit > 0 ? <span className="text-emerald-600 font-medium">${entry.credit.toLocaleString()}</span> : <span className="text-gray-300 dark:text-gray-600">—</span>}</td>
-                      <td className="px-5 py-2.5 text-right tabular-nums font-semibold text-gray-900 dark:text-white">${entry.balance.toLocaleString()}</td>
+              {statementLoading ? (
+                <div className="flex items-center justify-center py-10">
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+                </div>
+              ) : (
+                <table className="w-full text-[12px]">
+                  <thead>
+                    <tr className="border-b border-border dark:border-border-dark bg-surface-secondary/50 dark:bg-surface-dark-tertiary/50">
+                      <th className="text-left font-medium text-gray-400 px-5 py-2.5">Tarih</th>
+                      <th className="text-left font-medium text-gray-400 px-3 py-2.5">Referans</th>
+                      <th className="text-left font-medium text-gray-400 px-3 py-2.5">Açıklama</th>
+                      <th className="text-right font-medium text-red-400 px-3 py-2.5">Borç</th>
+                      <th className="text-right font-medium text-emerald-500 px-3 py-2.5">Alacak</th>
+                      <th className="text-right font-medium text-gray-400 px-5 py-2.5">Bakiye</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-border/30 dark:divide-border-dark/30">
+                    {(statement?.entries ?? demoLedger).map((entry: any) => {
+                      const debit = Number(entry.debit ?? 0)
+                      const credit = Number(entry.credit ?? 0)
+                      const balance = Number(entry.balance ?? 0)
+                      return (
+                        <tr key={entry.id} className="hover:bg-surface-secondary/40 dark:hover:bg-surface-dark-tertiary/40 transition-colors">
+                          <td className="px-5 py-2.5 text-gray-500 tabular-nums">{new Date(entry.createdAt ?? entry.date).toLocaleDateString('tr-TR')}</td>
+                          <td className="px-3 py-2.5"><span className="font-medium text-brand-600 dark:text-brand-400">{entry.entryNo ?? entry.ref ?? ''}</span></td>
+                          <td className="px-3 py-2.5 text-gray-600 dark:text-gray-400">{entry.description ?? entry.desc ?? ''}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">{debit > 0 ? <span className="text-red-500 font-medium">${debit.toLocaleString()}</span> : <span className="text-gray-300 dark:text-gray-600">—</span>}</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">{credit > 0 ? <span className="text-emerald-600 font-medium">${credit.toLocaleString()}</span> : <span className="text-gray-300 dark:text-gray-600">—</span>}</td>
+                          <td className="px-5 py-2.5 text-right tabular-nums font-semibold text-gray-900 dark:text-white">${balance.toLocaleString()}</td>
+                        </tr>
+                      )
+                    })}
+                    {(!statement?.entries && demoLedger.length === 0) && (
+                      <tr><td colSpan={6} className="text-center py-10 text-gray-400">Ekstre kaydı bulunamadı</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              )}
             </div>
           </motion.div>
         )}

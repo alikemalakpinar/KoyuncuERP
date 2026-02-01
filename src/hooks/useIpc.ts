@@ -234,6 +234,80 @@ export function useCreateInvoice() {
   })
 }
 
+// ── Ledger Statement ──────────────────────────────────────
+
+export function useAccountStatement(accountId: string, dateFrom?: string, dateTo?: string) {
+  return useQuery({
+    queryKey: ['ledger', 'statement', accountId, dateFrom, dateTo],
+    queryFn: async () => {
+      if (hasIpc()) return getApi().ledger.statement(accountId, dateFrom, dateTo)
+      return null
+    },
+    enabled: !!accountId,
+    staleTime: 30_000,
+  })
+}
+
+// ── Returns ───────────────────────────────────────────────
+
+export function useReturnsQuery(filters?: { status?: string }) {
+  return useQuery({
+    queryKey: ['returns', filters],
+    queryFn: async () => {
+      if (hasIpc()) return getApi().returns.list(filters)
+      return []
+    },
+    staleTime: 30_000,
+  })
+}
+
+export function useCreateReturn() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: any) => {
+      if (hasIpc()) return getApi().returns.create(data)
+      return { success: true }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['returns'] }),
+  })
+}
+
+export function useApproveReturn() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      if (hasIpc()) return getApi().returns.approve(id)
+      return { success: true }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['returns'] }),
+  })
+}
+
+export function useCompleteReturn() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, warehouseId }: { id: string; warehouseId: string }) => {
+      if (hasIpc()) return getApi().returns.complete(id, warehouseId)
+      return { success: true }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['returns'] })
+      qc.invalidateQueries({ queryKey: ['orders'] })
+    },
+  })
+}
+
+export function useCancelReturn() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason?: string }) => {
+      if (hasIpc()) return getApi().returns.cancel(id, reason)
+      return { success: true }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['returns'] }),
+  })
+}
+
 // ── Analytics ──────────────────────────────────────────────
 
 export function useDashboardKpisQuery() {

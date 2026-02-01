@@ -12,11 +12,12 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Wallet, Plus, Search, ArrowUpRight, ArrowDownRight,
   DollarSign, TrendingUp, Calendar, Clock, X, Lock,
-  Unlock, Banknote, CreditCard,
+  Unlock, Banknote, CreditCard, Loader2,
 } from 'lucide-react'
 import Pagination from '../components/ui/Pagination'
 import ExportButton from '../components/ui/ExportButton'
 import { useAuth } from '../contexts/AuthContext'
+import { hasIpc, api } from '../lib/ipc'
 
 // ── Types ──────────────────────────────────────────────────
 
@@ -98,6 +99,29 @@ export default function CashBookPage() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
   const [showNewTx, setShowNewTx] = useState(false)
+  const [txType, setTxType] = useState<TransactionType>('IN')
+  const [txAmount, setTxAmount] = useState('')
+  const [txReason, setTxReason] = useState('')
+  const [txSaving, setTxSaving] = useState(false)
+  const [txError, setTxError] = useState('')
+
+  const handleSaveTx = async () => {
+    if (!txAmount || !txReason) { setTxError('Tutar ve açıklama zorunludur.'); return }
+    setTxSaving(true); setTxError('')
+    try {
+      if (hasIpc()) {
+        const res = await api.cashTransact({
+          cashRegisterId: register.id,
+          type: txType,
+          amount: txAmount,
+          reason: txReason,
+        })
+        if (res && !res.success) { setTxError(res.error || 'İşlem başarısız'); setTxSaving(false); return }
+      }
+      setShowNewTx(false); setTxAmount(''); setTxReason(''); setTxType('IN')
+    } catch (err: any) { setTxError(err.message || 'Beklenmeyen hata') }
+    setTxSaving(false)
+  }
 
   const canEdit = hasPermission('view_accounting')
   const register = DEMO_REGISTERS.find((r) => r.id === activeRegister)!
@@ -373,37 +397,35 @@ export default function CashBookPage() {
               <div className="space-y-4">
                 {/* Type Toggle */}
                 <div className="flex gap-2">
-                  <button className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-green-50 dark:bg-green-900/20 border-2 border-green-500 px-4 py-3 text-sm font-medium text-green-700 dark:text-green-400">
+                  <button
+                    onClick={() => setTxType('IN')}
+                    className={`flex-1 flex items-center justify-center gap-2 rounded-xl border-2 px-4 py-3 text-sm font-medium transition-colors ${
+                      txType === 'IN'
+                        ? 'bg-green-50 dark:bg-green-900/20 border-green-500 text-green-700 dark:text-green-400'
+                        : 'border-border dark:border-border-dark text-gray-500 hover:border-green-300'
+                    }`}
+                  >
                     <ArrowDownRight className="h-4 w-4" /> Kasa Giriş
                   </button>
-                  <button className="flex-1 flex items-center justify-center gap-2 rounded-xl border-2 border-border dark:border-border-dark px-4 py-3 text-sm font-medium text-gray-500 hover:border-red-300 transition-colors">
+                  <button
+                    onClick={() => setTxType('OUT')}
+                    className={`flex-1 flex items-center justify-center gap-2 rounded-xl border-2 px-4 py-3 text-sm font-medium transition-colors ${
+                      txType === 'OUT'
+                        ? 'bg-red-50 dark:bg-red-900/20 border-red-500 text-red-700 dark:text-red-400'
+                        : 'border-border dark:border-border-dark text-gray-500 hover:border-red-300'
+                    }`}
+                  >
                     <ArrowUpRight className="h-4 w-4" /> Kasa Çıkış
                   </button>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Kategori</label>
-                  <select className="w-full rounded-xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark px-3 py-2.5 text-sm">
-                    {Object.entries(categoryLabels).map(([k, v]) => (
-                      <option key={k} value={k}>{v}</option>
-                    ))}
-                  </select>
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">Tutar ({register.currency})</label>
                   <input
                     type="number"
+                    value={txAmount}
+                    onChange={(e) => setTxAmount(e.target.value)}
                     placeholder="0.00"
-                    className="w-full rounded-xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">Cari (opsiyonel)</label>
-                  <input
-                    type="text"
-                    placeholder="Cari hesap seçin..."
                     className="w-full rounded-xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
                   />
                 </div>
@@ -412,17 +434,28 @@ export default function CashBookPage() {
                   <label className="block text-xs font-medium text-gray-500 mb-1">Açıklama</label>
                   <textarea
                     rows={2}
+                    value={txReason}
+                    onChange={(e) => setTxReason(e.target.value)}
                     placeholder="İşlem açıklaması..."
                     className="w-full rounded-xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 resize-none"
                   />
                 </div>
+
+                {txError && (
+                  <p className="text-xs text-red-600 bg-red-50 dark:bg-red-900/10 rounded-lg px-3 py-2">{txError}</p>
+                )}
               </div>
 
               <div className="mt-5 flex items-center justify-end gap-2">
-                <button onClick={() => setShowNewTx(false)} className="rounded-xl px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800">
+                <button onClick={() => { setShowNewTx(false); setTxError('') }} className="rounded-xl px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800">
                   İptal
                 </button>
-                <button className="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-500 transition-colors">
+                <button
+                  onClick={handleSaveTx}
+                  disabled={txSaving}
+                  className="flex items-center gap-2 rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-brand-500 transition-colors disabled:opacity-50"
+                >
+                  {txSaving && <Loader2 className="h-4 w-4 animate-spin" />}
                   Kaydet
                 </button>
               </div>
