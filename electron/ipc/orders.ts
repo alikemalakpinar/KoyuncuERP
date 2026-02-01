@@ -1,11 +1,16 @@
 /**
  * Order IPC Handlers – Branch-Scoped & Protected
  *
- * All queries enforce branchId from session context.
- * Auto-commission on DELIVERED, reversal on cancel.
+ * - Atomic DB-backed sequence for order numbers
+ * - All financial math via Decimal.js
+ * - $transaction for ACID compliance
+ * - Stock reservation on create, unreservation on cancel
+ * - NO ledger entry at order stage (invoices handle that)
+ * - Auto-commission on DELIVERED
  */
 
 import type { IpcMain } from 'electron'
+import Decimal from 'decimal.js'
 import { protectedProcedure } from './_secure'
 import { writeAuditLog } from './audit'
 import {
@@ -13,21 +18,36 @@ import {
   buildCommissionLedgerEntry,
 } from '../../src/services/finance'
 
-let orderSequence = 151
+Decimal.set({ precision: 20, rounding: Decimal.ROUND_HALF_UP })
 
-function generateOrderNo(branchCode?: string): string {
-  orderSequence++
+// ─── Atomic Sequence ────────────────────────────────────────
+async function nextSequenceValue(tx: any, key: string): Promise<number> {
+  const result = await tx.$queryRaw`
+    INSERT INTO sequences (id, key, value)
+    VALUES (gen_random_uuid(), ${key}, 1)
+    ON CONFLICT (key)
+    DO UPDATE SET value = sequences.value + 1
+    RETURNING value
+  ` as { value: number }[]
+  return result[0].value
+}
+
+async function generateOrderNo(tx: any, branchCode?: string): Promise<string> {
   const year = new Date().getFullYear()
+  const seq = await nextSequenceValue(tx, `order-${year}`)
   const prefix = branchCode ? `${branchCode}-` : 'ORD-'
-  return `${prefix}${year}-${String(orderSequence).padStart(4, '0')}`
+  return `${prefix}${year}-${String(seq).padStart(4, '0')}`
 }
 
-function generateEntryNo(): string {
-  const ts = Date.now().toString(36).toUpperCase()
-  return `LED-${ts}`
+async function generateEntryNo(tx: any, prefix = 'LED'): Promise<string> {
+  const year = new Date().getFullYear()
+  const seq = await nextSequenceValue(tx, `${prefix.toLowerCase()}-${year}`)
+  return `${prefix}-${year}-${String(seq).padStart(5, '0')}`
 }
 
+// ─── Handlers ───────────────────────────────────────────────
 export function registerOrderHandlers(ipcMain: IpcMain) {
+  // LIST
   ipcMain.handle('orders:list', protectedProcedure('read', async (ctx, filters?: {
     status?: string; accountId?: string; isCancelled?: boolean
   }) => {
@@ -54,6 +74,7 @@ export function registerOrderHandlers(ipcMain: IpcMain) {
     }
   }))
 
+  // GET
   ipcMain.handle('orders:get', protectedProcedure('read', async (ctx, args: { id: string }) => {
     try {
       return await ctx.prisma.order.findFirst({
@@ -74,6 +95,7 @@ export function registerOrderHandlers(ipcMain: IpcMain) {
     }
   }))
 
+  // CREATE — wrapped in $transaction, Decimal.js math, stock reservation, NO ledger
   ipcMain.handle('orders:create', protectedProcedure('manage_orders', async (ctx, data: {
     accountId: string; currency: string; vatRate: string
     agencyStaffId?: string; agencyCommissionRate?: string; staffCommissionRate?: string
@@ -81,185 +103,249 @@ export function registerOrderHandlers(ipcMain: IpcMain) {
     items: { productName: string; productGroup?: string; sku?: string; quantity: string; unit: string; unitPrice: string; purchasePrice?: string }[]
   }) => {
     try {
-      // Verify account belongs to this branch
-      const account = await ctx.prisma.account.findFirst({
-        where: { id: data.accountId, branchId: ctx.activeBranchId },
-      })
-      if (!account) return { success: false, error: 'Cari bu şubeye ait değil.' }
+      return await ctx.prisma.$transaction(async (tx: any) => {
+        // Verify account belongs to this branch
+        const account = await tx.account.findFirst({
+          where: { id: data.accountId, branchId: ctx.activeBranchId },
+        })
+        if (!account) return { success: false, error: 'Cari bu şubeye ait değil.' }
 
-      let totalAmount = 0
-      const itemsData = data.items.map((item) => {
-        const qty = parseFloat(item.quantity)
-        const price = parseFloat(item.unitPrice)
-        const lineTotal = qty * price
-        totalAmount += lineTotal
-        return {
-          productName: item.productName, productGroup: item.productGroup,
-          sku: item.sku, quantity: item.quantity, unit: item.unit,
-          unitPrice: item.unitPrice, totalPrice: lineTotal.toFixed(2),
-          purchasePrice: item.purchasePrice ?? '0',
+        let totalAmount = new Decimal(0)
+        const itemsData = data.items.map((item) => {
+          const qty = new Decimal(item.quantity)
+          const price = new Decimal(item.unitPrice)
+          const lineTotal = qty.mul(price)
+          totalAmount = totalAmount.plus(lineTotal)
+          return {
+            productName: item.productName, productGroup: item.productGroup,
+            sku: item.sku, quantity: item.quantity, unit: item.unit,
+            unitPrice: item.unitPrice, totalPrice: lineTotal.toFixed(2),
+            purchasePrice: item.purchasePrice ?? '0',
+          }
+        })
+
+        const vatRate = new Decimal(data.vatRate)
+        const vatAmount = totalAmount.mul(vatRate).div(100)
+        const grandTotal = totalAmount.plus(vatAmount)
+
+        const orderNo = await generateOrderNo(tx)
+
+        const order = await tx.order.create({
+          data: {
+            orderNo,
+            accountId: data.accountId,
+            branchId: ctx.activeBranchId,
+            currency: data.currency,
+            totalAmount: totalAmount.toFixed(2),
+            vatRate: data.vatRate, vatAmount: vatAmount.toFixed(2),
+            grandTotal: grandTotal.toFixed(2),
+            agencyStaffId: data.agencyStaffId,
+            agencyCommissionRate: data.agencyCommissionRate ?? '0',
+            staffCommissionRate: data.staffCommissionRate ?? '0',
+            orderExchangeRate: data.exchangeRate,
+            notes: data.notes,
+          },
+        })
+
+        await tx.orderItem.createMany({
+          data: itemsData.map((item) => ({ ...item, orderId: order.id })),
+        })
+
+        // Stock reservation for each item with a SKU
+        for (const item of data.items) {
+          if (!item.sku) continue
+          const stock = await tx.stock.findFirst({
+            where: { sku: item.sku, branchId: ctx.activeBranchId },
+          })
+          if (stock) {
+            const newReserved = new Decimal(String(stock.reservedQuantity ?? 0))
+              .plus(new Decimal(item.quantity))
+            await tx.stock.update({
+              where: { id: stock.id },
+              data: { reservedQuantity: newReserved.toFixed(2) },
+            })
+            await tx.stockMovement.create({
+              data: {
+                stockId: stock.id, branchId: ctx.activeBranchId,
+                type: 'RESERVE', quantity: item.quantity,
+                referenceId: order.id, referenceType: 'ORDER',
+                description: `Sipariş rezerve: ${orderNo}`,
+              },
+            })
+          }
         }
+
+        await writeAuditLog({
+          entityType: 'Order', entityId: order.id, action: 'CREATE',
+          newData: { order, items: itemsData },
+          userId: ctx.user.id, branchId: ctx.activeBranchId,
+          description: `Yeni sipariş: ${order.orderNo}`,
+        })
+
+        return { success: true, data: order }
       })
-
-      const vatRate = parseFloat(data.vatRate)
-      const vatAmount = totalAmount * (vatRate / 100)
-      const grandTotal = totalAmount + vatAmount
-
-      const order = await ctx.prisma.order.create({
-        data: {
-          orderNo: generateOrderNo(),
-          accountId: data.accountId,
-          branchId: ctx.activeBranchId,
-          currency: data.currency,
-          totalAmount: totalAmount.toFixed(2),
-          vatRate: data.vatRate, vatAmount: vatAmount.toFixed(2),
-          grandTotal: grandTotal.toFixed(2),
-          agencyStaffId: data.agencyStaffId,
-          agencyCommissionRate: data.agencyCommissionRate ?? '0',
-          staffCommissionRate: data.staffCommissionRate ?? '0',
-          orderExchangeRate: data.exchangeRate,
-          notes: data.notes,
-        },
-      })
-
-      await ctx.prisma.orderItem.createMany({
-        data: itemsData.map((item) => ({ ...item, orderId: order.id })),
-      })
-
-      // Ledger: INVOICE entry
-      await ctx.prisma.ledgerEntry.create({
-        data: {
-          entryNo: generateEntryNo(), accountId: data.accountId,
-          branchId: ctx.activeBranchId, type: 'INVOICE',
-          debit: grandTotal.toFixed(2), credit: '0',
-          currency: data.currency, exchangeRate: data.exchangeRate,
-          costCenter: 'SALES',
-          description: `Satış faturası – ${order.orderNo}`,
-          referenceId: order.id, referenceType: 'ORDER',
-        },
-      })
-
-      await writeAuditLog({
-        entityType: 'Order', entityId: order.id, action: 'CREATE',
-        newData: { order, items: itemsData },
-        userId: ctx.user.id, branchId: ctx.activeBranchId,
-        description: `Yeni sipariş: ${order.orderNo}`,
-      })
-
-      return { success: true, data: order }
     } catch (error: any) {
       return { success: false, error: error.message }
     }
   }))
 
+  // UPDATE STATUS — with auto-commission on DELIVERED
   ipcMain.handle('orders:updateStatus', protectedProcedure('manage_orders', async (ctx, args: {
     id: string; status: string
   }) => {
     try {
-      const order = await ctx.prisma.order.findFirst({
-        where: { id: args.id, branchId: ctx.activeBranchId },
-        include: {
-          account: true,
-          agencyStaff: { include: { agency: { include: { account: true } } } },
-        },
-      })
-
-      if (!order) return { success: false, error: 'Sipariş bulunamadı' }
-      if (order.isCancelled) return { success: false, error: 'İptal edilmiş sipariş güncellenemez' }
-
-      const previousStatus = order.status
-      const updated = await ctx.prisma.order.update({
-        where: { id: args.id },
-        data: { status: args.status as any },
-      })
-
-      // Auto-commission on DELIVERED
-      if (args.status === 'DELIVERED' && order.agencyStaff) {
-        const result = calculateCommission({
-          orderId: args.id,
-          orderTotal: String(order.grandTotal),
-          agencyCommissionRate: String(order.agencyCommissionRate),
-          staffCommissionRate: String(order.staffCommissionRate),
-          agencyId: order.agencyStaff.agency.id,
-          agencyStaffId: order.agencyStaff.id,
+      return await ctx.prisma.$transaction(async (tx: any) => {
+        const order = await tx.order.findFirst({
+          where: { id: args.id, branchId: ctx.activeBranchId },
+          include: {
+            account: true,
+            agencyStaff: { include: { agency: { include: { account: true } } } },
+          },
         })
 
-        await ctx.prisma.commissionRecord.create({
-          data: {
+        if (!order) return { success: false, error: 'Sipariş bulunamadı' }
+        if (order.isCancelled) return { success: false, error: 'İptal edilmiş sipariş güncellenemez' }
+
+        const previousStatus = order.status
+        const updated = await tx.order.update({
+          where: { id: args.id },
+          data: { status: args.status as any },
+        })
+
+        // Auto-commission on DELIVERED
+        if (args.status === 'DELIVERED' && order.agencyStaff) {
+          const result = calculateCommission({
             orderId: args.id,
+            orderTotal: String(order.grandTotal),
+            agencyCommissionRate: String(order.agencyCommissionRate),
+            staffCommissionRate: String(order.staffCommissionRate),
             agencyId: order.agencyStaff.agency.id,
-            branchId: ctx.activeBranchId,
             agencyStaffId: order.agencyStaff.id,
-            commissionRate: String(order.agencyCommissionRate),
-            baseAmount: String(order.grandTotal),
-            commissionAmount: result.totalCommission,
-          },
+          })
+
+          await tx.commissionRecord.create({
+            data: {
+              orderId: args.id,
+              agencyId: order.agencyStaff.agency.id,
+              branchId: ctx.activeBranchId,
+              agencyStaffId: order.agencyStaff.id,
+              commissionRate: String(order.agencyCommissionRate),
+              baseAmount: String(order.grandTotal),
+              commissionAmount: result.totalCommission,
+            },
+          })
+
+          const agencyAccountId = order.agencyStaff.agency.accountId
+          const ledgerData = buildCommissionLedgerEntry(
+            args.id, order.orderNo, agencyAccountId,
+            result.totalCommission, String(order.currency),
+            String(order.orderExchangeRate),
+          )
+
+          const entryNo = await generateEntryNo(tx, 'COM')
+          await tx.ledgerEntry.create({
+            data: {
+              entryNo,
+              branchId: ctx.activeBranchId,
+              ...ledgerData,
+            },
+          })
+        }
+
+        await writeAuditLog({
+          entityType: 'Order', entityId: args.id, action: 'STATUS_CHANGE',
+          previousData: { status: previousStatus }, newData: { status: args.status },
+          userId: ctx.user.id, branchId: ctx.activeBranchId,
+          description: `Sipariş durumu: ${previousStatus} → ${args.status} (${order.orderNo})`,
         })
 
-        const agencyAccountId = order.agencyStaff.agency.accountId
-        const ledgerData = buildCommissionLedgerEntry(
-          args.id, order.orderNo, agencyAccountId,
-          result.totalCommission, String(order.currency),
-          String(order.orderExchangeRate),
-        )
-
-        await ctx.prisma.ledgerEntry.create({
-          data: {
-            entryNo: generateEntryNo(),
-            branchId: ctx.activeBranchId,
-            ...ledgerData,
-          },
-        })
-      }
-
-      await writeAuditLog({
-        entityType: 'Order', entityId: args.id, action: 'STATUS_CHANGE',
-        previousData: { status: previousStatus }, newData: { status: args.status },
-        userId: ctx.user.id, branchId: ctx.activeBranchId,
-        description: `Sipariş durumu: ${previousStatus} → ${args.status} (${order.orderNo})`,
+        return { success: true, data: updated }
       })
-
-      return { success: true, data: updated }
     } catch (error: any) {
       return { success: false, error: error.message }
     }
   }))
 
+  // CANCEL — stock unreservation, invoice cancellation, commission reversal
   ipcMain.handle('orders:cancel', protectedProcedure('manage_orders', async (ctx, args: {
     id: string; reason: string
   }) => {
     try {
-      const order = await ctx.prisma.order.findFirst({
-        where: { id: args.id, branchId: ctx.activeBranchId },
-      })
-      if (!order) return { success: false, error: 'Sipariş bulunamadı' }
-      if (order.isCancelled) return { success: false, error: 'Zaten iptal edilmiş' }
+      return await ctx.prisma.$transaction(async (tx: any) => {
+        const order = await tx.order.findFirst({
+          where: { id: args.id, branchId: ctx.activeBranchId },
+          include: { items: true },
+        })
+        if (!order) return { success: false, error: 'Sipariş bulunamadı' }
+        if (order.isCancelled) return { success: false, error: 'Zaten iptal edilmiş' }
 
-      await ctx.prisma.order.update({
-        where: { id: args.id },
-        data: { isCancelled: true, status: 'CANCELLED' },
-      })
+        // 1. Cancel order
+        await tx.order.update({
+          where: { id: args.id },
+          data: { isCancelled: true, status: 'CANCELLED' },
+        })
 
-      // Reversal ledger entry
-      await ctx.prisma.ledgerEntry.create({
-        data: {
-          entryNo: generateEntryNo(), accountId: order.accountId,
-          branchId: ctx.activeBranchId, type: 'REVERSAL',
-          debit: '0', credit: String(order.grandTotal),
-          currency: order.currency, exchangeRate: String(order.orderExchangeRate),
-          costCenter: 'SALES_REVERSAL',
-          description: `Sipariş iptali (Ters Fiş) – ${order.orderNo}: ${args.reason}`,
-          referenceId: args.id, referenceType: 'ORDER',
-        },
-      })
+        // 2. Unreserve stock
+        for (const item of order.items) {
+          if (!item.sku) continue
+          const stock = await tx.stock.findFirst({
+            where: { sku: item.sku, branchId: ctx.activeBranchId },
+          })
+          if (stock) {
+            const newReserved = Decimal.max(
+              new Decimal(0),
+              new Decimal(String(stock.reservedQuantity ?? 0)).minus(new Decimal(String(item.quantity))),
+            )
+            await tx.stock.update({
+              where: { id: stock.id },
+              data: { reservedQuantity: newReserved.toFixed(2) },
+            })
+            await tx.stockMovement.create({
+              data: {
+                stockId: stock.id, branchId: ctx.activeBranchId,
+                type: 'UNRESERVE', quantity: String(item.quantity),
+                referenceId: args.id, referenceType: 'ORDER',
+                description: `Sipariş iptal – rezerve kaldırma: ${order.orderNo}`,
+              },
+            })
+          }
+        }
 
-      await writeAuditLog({
-        entityType: 'Order', entityId: args.id, action: 'CANCEL',
-        previousData: order, userId: ctx.user.id, branchId: ctx.activeBranchId,
-        description: `Sipariş iptal: ${order.orderNo} – ${args.reason}`,
-      })
+        // 3. Cancel related invoices and their ledger entries
+        const invoices = await tx.invoice.findMany({
+          where: { orderId: args.id, isCancelled: false },
+        })
+        for (const inv of invoices) {
+          await tx.invoice.update({ where: { id: inv.id }, data: { isCancelled: true, status: 'CANCELLED' } })
 
-      return { success: true }
+          const reversalEntryNo = await generateEntryNo(tx, 'REV')
+          await tx.ledgerEntry.create({
+            data: {
+              entryNo: reversalEntryNo, accountId: order.accountId,
+              branchId: ctx.activeBranchId, type: 'REVERSAL',
+              debit: '0', credit: String(inv.grandTotal),
+              currency: inv.currency, exchangeRate: String(inv.exchangeRate ?? order.orderExchangeRate),
+              costCenter: 'SALES_REVERSAL',
+              description: `Fatura iptali (Ters Fiş) – ${inv.invoiceNo}: ${args.reason}`,
+              referenceId: inv.id, referenceType: 'INVOICE',
+            },
+          })
+        }
+
+        // 4. Cancel commissions
+        await tx.commissionRecord.updateMany({
+          where: { orderId: args.id, isCancelled: false },
+          data: { isCancelled: true },
+        })
+
+        await writeAuditLog({
+          entityType: 'Order', entityId: args.id, action: 'CANCEL',
+          previousData: order, userId: ctx.user.id, branchId: ctx.activeBranchId,
+          description: `Sipariş iptal: ${order.orderNo} – ${args.reason}`,
+        })
+
+        return { success: true }
+      })
     } catch (error: any) {
       return { success: false, error: error.message }
     }
