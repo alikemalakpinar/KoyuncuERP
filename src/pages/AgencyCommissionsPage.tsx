@@ -183,7 +183,14 @@ export default function AgencyCommissionsPage() {
               </tr>
             </thead>
             <tbody>
-              {agencies.map((agency: any) => (
+              {agencies.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-16 text-center">
+                    <Handshake className="h-10 w-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Henüz acente kaydı yok</p>
+                  </td>
+                </tr>
+              ) : agencies.map((agency: any) => (
                 <tr
                   key={agency.id}
                   className="border-b border-border/50 dark:border-border-dark/50 hover:bg-surface-secondary dark:hover:bg-surface-dark-secondary transition-colors"

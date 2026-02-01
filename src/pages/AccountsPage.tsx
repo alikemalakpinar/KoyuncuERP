@@ -159,7 +159,15 @@ export default function AccountsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((account: any) => {
+                {filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-16 text-center">
+                      <Users className="h-10 w-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                      <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Cari hesap bulunamadı</p>
+                      <p className="text-xs text-gray-400 mt-1">Arama veya filtre kriterlerini değiştirin</p>
+                    </td>
+                  </tr>
+                ) : filtered.map((account: any) => {
                   const balanceNum = parseFloat((account.balance || '0').replace(/,/g, ''))
                   const limitNum = parseFloat((account.riskLimit || '1').replace(/,/g, ''))
                   const usagePercent = limitNum > 0 ? (balanceNum / limitNum) * 100 : 0

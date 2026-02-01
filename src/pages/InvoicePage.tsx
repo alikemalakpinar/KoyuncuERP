@@ -237,7 +237,15 @@ export default function InvoicePage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((inv) => {
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={10} className="px-4 py-16 text-center">
+                  <FileText className="h-10 w-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Fatura bulunamadı</p>
+                  <p className="text-xs text-gray-400 mt-1">Filtreleri değiştirerek tekrar deneyin</p>
+                </td>
+              </tr>
+            ) : filtered.map((inv) => {
               const sc = statusConfig[inv.status]
               return (
                 <tr key={inv.id} className="border-b border-border/50 dark:border-border-dark/50 hover:bg-surface-secondary/30 dark:hover:bg-surface-dark-secondary/30">
