@@ -110,47 +110,4 @@ export function registerProductHandlers(ipc: IpcMain) {
       include: { warehouse: true },
     })
   }))
-
-  ipc.handle('invoices:createFromOrder', protectedProcedure('manage_orders', async (ctx, data: { orderId: string }) => {
-    try {
-      const order = await ctx.prisma.order.findFirst({
-        where: { id: data.orderId, branchId: ctx.activeBranchId },
-        include: { account: true, items: true },
-      })
-      if (!order) return { success: false, error: 'Sipariş bulunamadı' }
-
-      const invoiceNo = `INV-${Date.now().toString(36).toUpperCase()}`
-      const invoice = await ctx.prisma.invoice.create({
-        data: {
-          invoiceNo, orderId: order.id, branchId: ctx.activeBranchId,
-          date: new Date(),
-          dueDate: order.account?.paymentTermDays
-            ? new Date(Date.now() + order.account.paymentTermDays * 86400000) : null,
-          subtotal: order.totalAmount, taxTotal: order.vatAmount,
-          grandTotal: order.grandTotal, currency: order.currency,
-          status: 'FINALIZED',
-        },
-      })
-
-      const entryNo = `LE-${Date.now().toString(36).toUpperCase()}`
-      await ctx.prisma.ledgerEntry.create({
-        data: {
-          entryNo, accountId: order.accountId, branchId: ctx.activeBranchId,
-          type: 'INVOICE', debit: order.grandTotal, credit: 0,
-          currency: order.currency, exchangeRate: order.orderExchangeRate,
-          costCenter: 'SALES', description: `Fatura: ${invoiceNo}`,
-          referenceId: order.id, referenceType: 'ORDER', invoiceId: invoice.id,
-        },
-      })
-
-      await writeAuditLog({
-        entityType: 'Invoice', entityId: invoice.id, action: 'CREATE',
-        newData: invoice, userId: ctx.user.id, branchId: ctx.activeBranchId,
-        description: `Fatura: ${invoiceNo} (Sipariş: ${order.orderNo})`,
-      })
-      return { success: true, data: invoice }
-    } catch (err: any) {
-      return { success: false, error: err.message }
-    }
-  }))
 }
