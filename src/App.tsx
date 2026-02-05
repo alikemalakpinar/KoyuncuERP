@@ -33,6 +33,9 @@ import PimPage from './pages/PimPage'
 import ChartOfAccountsPage from './pages/ChartOfAccountsPage'
 import CostCentersPage from './pages/CostCentersPage'
 import ManufacturingPage from './pages/ManufacturingPage'
+import AgencyManagementPage from './pages/AgencyManagementPage'
+import ConsignmentPage from './pages/ConsignmentPage'
+import BranchSelectorPage from './pages/BranchSelectorPage'
 import NewOrderModal from './components/modals/NewOrderModal'
 import NewPaymentModal from './components/modals/NewPaymentModal'
 import { ToastProvider } from './components/Toast'
@@ -168,6 +171,9 @@ function AuthenticatedApp() {
             <Route path="/quotations" element={<QuotationsPage />} />
             <Route path="/shipments" element={<ShipmentsPage />} />
             <Route path="/samples" element={<SamplesPage />} />
+            <Route path="/consignment" element={<ConsignmentPage />} />
+            <Route path="/agency-management" element={<AgencyManagementPage />} />
+            <Route path="/branch-select" element={<BranchSelectorPage />} />
             <Route path="/export-docs" element={<ExportDocsPage />} />
             <Route path="/cheques" element={<ChequesPage />} />
             <Route path="/waybills" element={<WaybillsPage />} />

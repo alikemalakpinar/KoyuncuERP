@@ -7,7 +7,7 @@ import {
   Receipt, TrendingUp, Award, LogOut, Activity, Building2,
   ClipboardList, Ship, Palette, Stamp, ChevronsLeft, ChevronsRight,
   FileCheck, Truck, Wallet, RotateCcw, ClipboardCheck,
-  Tags, BookOpenCheck, Factory, CircleDollarSign,
+  Tags, BookOpenCheck, Factory, CircleDollarSign, Anchor, PackageCheck,
 } from 'lucide-react'
 import { useAuth, roleLabels, type UserRole } from '../contexts/AuthContext'
 
@@ -50,7 +50,8 @@ export default function Sidebar() {
       items: [
         { to: '/quotations', icon: ClipboardList, label: 'Teklifler', show: role !== 'VIEWER' },
         { to: '/orders', icon: ShoppingCart, label: 'Siparişler', show: true },
-        { to: '/samples', icon: Palette, label: 'Numuneler', show: role !== 'VIEWER' },
+        { to: '/agency-management', icon: Anchor, label: 'Acenta Yönetimi', show: role !== 'VIEWER' },
+        { to: '/consignment', icon: PackageCheck, label: 'Konsinye Takip', show: role !== 'VIEWER' },
       ],
     },
     {
