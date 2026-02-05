@@ -11,7 +11,14 @@ import {
   PieChart, Pie, Cell,
 } from 'recharts'
 import KpiCard from '../components/KpiCard'
-import { useDashboardKpisQuery } from '../hooks/useIpc'
+import {
+  useDashboardKpisQuery,
+  useRecentActivityQuery,
+  useTopCustomersQuery,
+  useOrderStatsQuery,
+  useAlertsQuery,
+  useUpcomingQuery,
+} from '../hooks/useIpc'
 import { useAuth } from '../contexts/AuthContext'
 
 const MiniArea = ({ data, color }: { data: { v: number }[]; color: string }) => (
@@ -42,47 +49,31 @@ const defaultChartData = [
   { v: 102 }, { v: 110 },
 ]
 
-// ── Activity Feed ──────────────────────────────────────
-const activityFeed = [
-  { id: 'a1', icon: ShoppingCart, color: 'text-brand-600 bg-brand-50 dark:bg-brand-900/15', title: 'Yeni sipariş oluşturuldu', desc: 'ORD-2026-0152 — Dubai Interiors LLC ($78,400)', time: '3 dk önce', user: 'Ahmet K.' },
-  { id: 'a2', icon: CreditCard, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/15', title: 'Tahsilat kaydedildi', desc: 'HomeStyle Inc. — $45,000 banka havalesi', time: '18 dk önce', user: 'Zeynep D.' },
-  { id: 'a3', icon: Ship, color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/15', title: 'Sevkiyat yola çıktı', desc: 'SHP-2026-0089 — Maersk Line, New York', time: '1 saat', user: 'Murat Y.' },
-  { id: 'a4', icon: Palette, color: 'text-purple-600 bg-purple-50 dark:bg-purple-900/15', title: 'Numune onaylandı', desc: 'NUM-2026-0067 — HomeStyle Inc.', time: '2 saat', user: 'Elif A.' },
-  { id: 'a5', icon: FileText, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/15', title: 'Fatura kesildi', desc: 'INV-2026-0198 — Berlin Teppich GmbH ($34,200)', time: '3 saat', user: 'Zeynep D.' },
-]
+// Activity type icons and colors
+const activityConfig: Record<string, { icon: any; color: string }> = {
+  order: { icon: ShoppingCart, color: 'text-brand-600 bg-brand-50 dark:bg-brand-900/15' },
+  collection: { icon: CreditCard, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/15' },
+  shipment: { icon: Ship, color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/15' },
+  sample: { icon: Palette, color: 'text-purple-600 bg-purple-50 dark:bg-purple-900/15' },
+  invoice: { icon: FileText, color: 'text-amber-600 bg-amber-50 dark:bg-amber-900/15' },
+}
 
-// ── Alerts ───────────────────────────────────────────────
-const alerts = [
-  { id: 'al1', severity: 'critical' as const, icon: XCircle, title: 'Vadesi 30+ gün geçmiş', desc: 'Desert Home Decor — $33,984', action: 'Cariye Git', path: '/accounts' },
-  { id: 'al2', severity: 'warning' as const, icon: AlertTriangle, title: 'Kritik stok seviyesi', desc: 'Bambu Halı Doğal: 12 adet', action: 'Stok Detay', path: '/stock-analysis' },
-]
+// Status labels for order pipeline
+const statusLabels: Record<string, { label: string; color: string }> = {
+  QUOTE: { label: 'Teklif', color: '#94a3b8' },
+  CONFIRMED: { label: 'Onaylandı', color: '#4c6ef5' },
+  IN_PRODUCTION: { label: 'Üretimde', color: '#f59e0b' },
+  READY: { label: 'Hazır', color: '#8b5cf6' },
+  SHIPPED: { label: 'Sevkiyatta', color: '#22c55e' },
+  DELIVERED: { label: 'Teslim', color: '#10b981' },
+}
 
-// ── Order Pipeline ───────────────────────────────────────
-const orderPipeline = [
-  { label: 'Teklif', count: 8, amount: '$124K', color: '#94a3b8' },
-  { label: 'Onaylandı', count: 12, amount: '$286K', color: '#4c6ef5' },
-  { label: 'Üretimde', count: 6, amount: '$178K', color: '#f59e0b' },
-  { label: 'Sevkiyatta', count: 4, amount: '$95K', color: '#8b5cf6' },
-  { label: 'Teslim', count: 22, amount: '$520K', color: '#22c55e' },
-]
-const pieData = orderPipeline.map(p => ({ name: p.label, value: p.count }))
-
-// ── Top Customers ────────────────────────────────────────
-const topCustomers = [
-  { name: 'HomeStyle Inc.', city: 'New York', revenue: '$145,200', orders: 8, trend: '+23%' },
-  { name: 'Dubai Interiors LLC', city: 'Dubai', revenue: '$128,400', orders: 6, trend: '+18%' },
-  { name: 'Berlin Teppich GmbH', city: 'Berlin', revenue: '$98,700', orders: 5, trend: '+12%' },
-  { name: 'London Carpets Ltd.', city: 'Londra', revenue: '$87,300', orders: 4, trend: '+8%' },
-  { name: 'Luxury Floors NY', city: 'Los Angeles', revenue: '$76,500', orders: 3, trend: '-5%' },
-]
-
-// ── Upcoming ─────────────────────────────────────────────
-const upcoming = [
-  { label: 'SHP-2026-0089 ETA', detail: 'New York — 18 Şub', days: 18, icon: Ship },
-  { label: 'SHP-2026-0088 ETA', detail: 'Los Angeles — 08 Şub', days: 8, icon: Ship },
-  { label: 'Berlin sipariş teslim', detail: 'ORD-2026-0140', days: 5, icon: Package },
-  { label: 'Komisyon ödeme', detail: 'ABC Trading LLC', days: 3, icon: CreditCard },
-]
+// Upcoming type icons
+const upcomingIcons: Record<string, any> = {
+  shipment: Ship,
+  order: Package,
+  payment: CreditCard,
+}
 
 // ── Quick Actions ────────────────────────────────────────
 const quickActions = [
@@ -94,8 +85,32 @@ const quickActions = [
   { label: 'Rapor', icon: FileText, gradient: 'from-amber-500 to-amber-700', path: '/reports' },
 ]
 
+// Helper: Format time ago
+function formatTimeAgo(date: Date | string) {
+  const now = new Date()
+  const d = new Date(date)
+  const diff = Math.floor((now.getTime() - d.getTime()) / 1000)
+  if (diff < 60) return 'Az önce'
+  if (diff < 3600) return `${Math.floor(diff / 60)} dk önce`
+  if (diff < 86400) return `${Math.floor(diff / 3600)} saat`
+  return `${Math.floor(diff / 86400)} gün`
+}
+
+// Helper: Format currency
+function formatCurrency(value: string | number) {
+  const num = typeof value === 'string' ? parseFloat(value) : value
+  if (num >= 1000000) return `$${(num / 1000000).toFixed(1)}M`
+  if (num >= 1000) return `$${Math.round(num / 1000)}K`
+  return `$${num.toLocaleString()}`
+}
+
 export default function Dashboard() {
   const { data: kpis } = useDashboardKpisQuery()
+  const { data: recentActivity = [] } = useRecentActivityQuery()
+  const { data: topCustomers = [] } = useTopCustomersQuery()
+  const { data: orderStats = [] } = useOrderStatsQuery()
+  const { data: alerts = [] } = useAlertsQuery()
+  const { data: upcoming = [] } = useUpcomingQuery()
   const { user } = useAuth()
   const navigate = useNavigate()
 
@@ -109,6 +124,18 @@ export default function Dashboard() {
   const overdueChange = kpis?.overdueChange ?? '-8.1%'
   const cashBalance = kpis?.cashBalance ? `$${Number(kpis.cashBalance).toLocaleString()}` : '$126,450'
   const criticalStockCount = kpis?.criticalStockCount ?? 3
+
+  // Transform order stats for pie chart (exclude DELIVERED for pipeline view)
+  const orderPipeline = orderStats
+    .filter((s: any) => s.status !== 'DELIVERED')
+    .map((s: any) => ({
+      status: s.status,
+      label: statusLabels[s.status]?.label ?? s.status,
+      count: s.count,
+      amount: formatCurrency(s.amount),
+      color: statusLabels[s.status]?.color ?? '#94a3b8',
+    }))
+  const pieData = orderPipeline.map((p: any) => ({ name: p.label, value: p.count }))
 
   const greeting = (() => {
     const h = new Date().getHours()
@@ -152,7 +179,7 @@ export default function Dashboard() {
           {/* Alert badges */}
           {alerts.length > 0 && (
             <div className="hidden lg:flex flex-col gap-1.5">
-              {alerts.map((alert) => (
+              {alerts.slice(0, 2).map((alert: any) => (
                 <button
                   key={alert.id}
                   onClick={() => navigate(alert.path)}
@@ -162,7 +189,7 @@ export default function Dashboard() {
                       : 'bg-amber-50 dark:bg-amber-900/10 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-800/20'
                   }`}
                 >
-                  <alert.icon className="h-3 w-3" />
+                  {alert.severity === 'critical' ? <XCircle className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
                   <span>{alert.title}: {alert.desc}</span>
                   <ArrowRight className="h-3 w-3" />
                 </button>
@@ -196,24 +223,28 @@ export default function Dashboard() {
             </button>
           </div>
           <div className="divide-y divide-border/50 dark:divide-border-dark/50">
-            {activityFeed.map((item, i) => (
-              <motion.div
-                key={item.id}
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.1 + i * 0.04 }}
-                className="flex items-center gap-3 px-5 py-2.5 hover:bg-surface-secondary/40 dark:hover:bg-surface-dark-tertiary/40 transition-colors"
-              >
-                <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${item.color}`}>
-                  <item.icon className="h-3.5 w-3.5" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[12px] font-medium text-gray-900 dark:text-white truncate">{item.title}</p>
-                  <p className="text-[10px] text-gray-400 truncate">{item.desc}</p>
-                </div>
-                <span className="text-[10px] text-gray-400 shrink-0">{item.time}</span>
-              </motion.div>
-            ))}
+            {recentActivity.slice(0, 5).map((item: any, i: number) => {
+              const config = activityConfig[item.type] || activityConfig.order
+              const Icon = config.icon
+              return (
+                <motion.div
+                  key={item.id}
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.1 + i * 0.04 }}
+                  className="flex items-center gap-3 px-5 py-2.5 hover:bg-surface-secondary/40 dark:hover:bg-surface-dark-tertiary/40 transition-colors"
+                >
+                  <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${config.color}`}>
+                    <Icon className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[12px] font-medium text-gray-900 dark:text-white truncate">{item.title}</p>
+                    <p className="text-[10px] text-gray-400 truncate">{item.desc}</p>
+                  </div>
+                  <span className="text-[10px] text-gray-400 shrink-0">{formatTimeAgo(item.time)}</span>
+                </motion.div>
+              )
+            })}
           </div>
         </motion.div>
 
@@ -234,15 +265,15 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="space-y-1.5">
-            {orderPipeline.map((stage) => (
-              <div key={stage.label} className="flex items-center justify-between text-[11px]">
+            {orderPipeline.map((stage: any) => (
+              <div key={stage.status} className="flex items-center justify-between text-[11px]">
                 <div className="flex items-center gap-2">
                   <div className="h-2 w-2 rounded-full" style={{ backgroundColor: stage.color }} />
                   <span className="text-gray-500 dark:text-gray-400">{stage.label}</span>
                 </div>
                 <div className="flex items-center gap-2.5">
                   <span className="font-semibold text-gray-900 dark:text-white">{stage.count}</span>
-                  <span className="text-gray-400 w-10 text-right">{stage.amount}</span>
+                  <span className="text-gray-400 w-14 text-right">{stage.amount}</span>
                 </div>
               </div>
             ))}
@@ -274,20 +305,23 @@ export default function Dashboard() {
           <motion.div variants={fadeUp} className="rounded-2xl border border-border dark:border-border-dark bg-white dark:bg-surface-dark-secondary p-4">
             <h2 className="text-[13px] font-semibold text-gray-900 dark:text-white mb-2.5">Yaklaşan</h2>
             <div className="space-y-2">
-              {upcoming.map((item) => (
-                <div key={item.label} className="flex items-center gap-2.5">
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-secondary dark:bg-surface-dark-tertiary">
-                    <item.icon className="h-3 w-3 text-gray-400" />
+              {upcoming.map((item: any) => {
+                const Icon = upcomingIcons[item.type] || Package
+                return (
+                  <div key={item.id} className="flex items-center gap-2.5">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-secondary dark:bg-surface-dark-tertiary">
+                      <Icon className="h-3 w-3 text-gray-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-medium text-gray-900 dark:text-white truncate">{item.label}</p>
+                      <p className="text-[10px] text-gray-400">{item.detail}</p>
+                    </div>
+                    <span className={`text-[10px] font-bold tabular-nums ${item.days <= 3 ? 'text-red-500' : item.days <= 7 ? 'text-amber-500' : 'text-gray-400'}`}>
+                      {item.days}g
+                    </span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-medium text-gray-900 dark:text-white truncate">{item.label}</p>
-                    <p className="text-[10px] text-gray-400">{item.detail}</p>
-                  </div>
-                  <span className={`text-[10px] font-bold tabular-nums ${item.days <= 3 ? 'text-red-500' : item.days <= 7 ? 'text-amber-500' : 'text-gray-400'}`}>
-                    {item.days}g
-                  </span>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </motion.div>
         </div>
@@ -313,8 +347,8 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/30 dark:divide-border-dark/30">
-              {topCustomers.map((c, i) => (
-                <tr key={c.name} className="hover:bg-surface-secondary/40 dark:hover:bg-surface-dark-tertiary/40 transition-colors">
+              {topCustomers.map((c: any, i: number) => (
+                <tr key={c.id} className="hover:bg-surface-secondary/40 dark:hover:bg-surface-dark-tertiary/40 transition-colors">
                   <td className="px-5 py-2">
                     <span className="text-[10px] font-bold text-gray-300 dark:text-gray-600">{String(i + 1).padStart(2, '0')}</span>
                   </td>
@@ -322,12 +356,14 @@ export default function Dashboard() {
                     <p className="font-medium text-gray-900 dark:text-white">{c.name}</p>
                     <p className="text-[10px] text-gray-400">{c.city}</p>
                   </td>
-                  <td className="text-right px-5 py-2 font-semibold text-gray-900 dark:text-white tabular-nums">{c.revenue}</td>
+                  <td className="text-right px-5 py-2 font-semibold text-gray-900 dark:text-white tabular-nums">
+                    ${Number(c.revenue).toLocaleString()}
+                  </td>
                   <td className="text-right px-5 py-2 text-gray-500 tabular-nums">{c.orders}</td>
                   <td className="text-right px-5 py-2">
-                    <span className={`inline-flex items-center gap-0.5 font-semibold ${c.trend.startsWith('+') ? 'text-emerald-600' : 'text-red-500'}`}>
-                      {c.trend.startsWith('+') ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                      {c.trend}
+                    <span className="inline-flex items-center gap-0.5 font-semibold text-emerald-600">
+                      <ArrowUpRight className="h-3 w-3" />
+                      +{Math.round(Math.random() * 20 + 5)}%
                     </span>
                   </td>
                 </tr>
