@@ -333,6 +333,78 @@ export function useCancelReturn() {
   })
 }
 
+// ── Agencies & Staff ────────────────────────────────────────
+
+export function useAgenciesQuery() {
+  return useQuery({
+    queryKey: ['agencies'],
+    queryFn: async () => {
+      if (hasIpc()) return getApi().accounts.listAgencies()
+      // Demo fallback
+      return [
+        { id: 'ag1', name: 'ABC Trading LLC', region: 'Doğu ABD', defaultCommission: 5.0, accountCode: 'AG-001' },
+        { id: 'ag2', name: 'West Coast Carpets', region: 'Batı ABD', defaultCommission: 4.5, accountCode: 'AG-002' },
+        { id: 'ag3', name: 'Southern Flooring Co.', region: 'Güney ABD', defaultCommission: 5.0, accountCode: 'AG-003' },
+      ]
+    },
+    staleTime: 30_000,
+  })
+}
+
+export function useAgencyStaffQuery(agencyId: string | null) {
+  return useQuery({
+    queryKey: ['agencyStaff', agencyId],
+    queryFn: async () => {
+      if (!agencyId) return []
+      if (hasIpc()) return getApi().accounts.listAgencyStaff(agencyId)
+      // Demo fallback
+      const demoStaff: Record<string, any[]> = {
+        ag1: [
+          { id: 'as1', name: 'Robert Johnson', commissionRate: 2.0 },
+          { id: 'as2', name: 'Emily Davis', commissionRate: 1.5 },
+        ],
+        ag2: [
+          { id: 'as3', name: 'Sarah Williams', commissionRate: 2.0 },
+        ],
+        ag3: [
+          { id: 'as4', name: 'James Brown', commissionRate: 2.0 },
+        ],
+      }
+      return demoStaff[agencyId] || []
+    },
+    enabled: !!agencyId,
+    staleTime: 30_000,
+  })
+}
+
+export function usePriceListsQuery() {
+  return useQuery({
+    queryKey: ['priceLists'],
+    queryFn: async () => {
+      if (hasIpc()) return getApi().pricing.listPriceLists()
+      // Demo fallback
+      return [
+        { id: 'pl1', name: 'USA Wholesale', multiplier: 0.85, currency: 'USD' },
+        { id: 'pl2', name: 'USA Premium', multiplier: 0.92, currency: 'USD' },
+        { id: 'pl3', name: '2026 Distributor', multiplier: 0.78, currency: 'USD' },
+      ]
+    },
+    staleTime: 60_000,
+  })
+}
+
+export function useUsersQuery() {
+  return useQuery({
+    queryKey: ['users'],
+    queryFn: async () => {
+      if (hasIpc()) return getApi().auth.listUsers()
+      // Demo fallback
+      return []
+    },
+    staleTime: 60_000,
+  })
+}
+
 // ── Analytics ──────────────────────────────────────────────
 
 export function useDashboardKpisQuery() {
