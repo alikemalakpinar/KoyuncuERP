@@ -39,6 +39,8 @@ import BranchSelectorPage from './pages/BranchSelectorPage'
 import NewOrderModal from './components/modals/NewOrderModal'
 import NewPaymentModal from './components/modals/NewPaymentModal'
 import { ToastProvider } from './components/Toast'
+import { KeyboardShortcutsHelp } from './components/KeyboardShortcutsHelp'
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 
 // ── Error Boundary ─────────────────────────────────────────
@@ -144,7 +146,12 @@ function AuthenticatedApp() {
   const [orderModalOpen, setOrderModalOpen] = useState(false)
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
 
+  // Initialize keyboard shortcuts
+  useKeyboardShortcuts()
+
   return (
+    <>
+    <KeyboardShortcutsHelp />
     <StandardLayout
       onNewOrder={() => setOrderModalOpen(true)}
       onNewPayment={() => setPaymentModalOpen(true)}
@@ -197,6 +204,7 @@ function AuthenticatedApp() {
         onClose={() => setPaymentModalOpen(false)}
       />
     </StandardLayout>
+    </>
   )
 }
 

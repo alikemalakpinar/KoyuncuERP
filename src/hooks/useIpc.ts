@@ -501,6 +501,99 @@ export function useAgencyPerformanceQuery() {
   })
 }
 
+// Demo data for new analytics hooks
+const DEMO_RECENT_ACTIVITY = [
+  { id: 'a1', type: 'order', title: 'Yeni sipariş oluşturuldu', desc: 'ORD-2026-0152 — Dubai Interiors LLC ($78,400)', time: new Date(Date.now() - 3 * 60 * 1000), user: 'Ahmet K.' },
+  { id: 'a2', type: 'collection', title: 'Tahsilat kaydedildi', desc: 'HomeStyle Inc. — $45,000 banka havalesi', time: new Date(Date.now() - 18 * 60 * 1000), user: 'Zeynep D.' },
+  { id: 'a3', type: 'shipment', title: 'Sevkiyat yola çıktı', desc: 'SHP-2026-0089 — Maersk Line, New York', time: new Date(Date.now() - 60 * 60 * 1000), user: 'Murat Y.' },
+  { id: 'a4', type: 'sample', title: 'Numune onaylandı', desc: 'NUM-2026-0067 — HomeStyle Inc.', time: new Date(Date.now() - 2 * 60 * 60 * 1000), user: 'Elif A.' },
+  { id: 'a5', type: 'invoice', title: 'Fatura kesildi', desc: 'INV-2026-0198 — Berlin Teppich GmbH ($34,200)', time: new Date(Date.now() - 3 * 60 * 60 * 1000), user: 'Zeynep D.' },
+]
+
+const DEMO_TOP_CUSTOMERS = [
+  { id: '1', name: 'HomeStyle Inc.', city: 'New York', revenue: '145200.00', orders: 8 },
+  { id: '2', name: 'Dubai Interiors LLC', city: 'Dubai', revenue: '128400.00', orders: 6 },
+  { id: '3', name: 'Berlin Teppich GmbH', city: 'Berlin', revenue: '98700.00', orders: 5 },
+  { id: '4', name: 'London Carpets Ltd.', city: 'Londra', revenue: '87300.00', orders: 4 },
+  { id: '5', name: 'Luxury Floors NY', city: 'Los Angeles', revenue: '76500.00', orders: 3 },
+]
+
+const DEMO_ORDER_STATS = [
+  { status: 'QUOTE', count: 8, amount: '124000.00' },
+  { status: 'CONFIRMED', count: 12, amount: '286000.00' },
+  { status: 'IN_PRODUCTION', count: 6, amount: '178000.00' },
+  { status: 'READY', count: 3, amount: '65000.00' },
+  { status: 'SHIPPED', count: 4, amount: '95000.00' },
+  { status: 'DELIVERED', count: 22, amount: '520000.00' },
+]
+
+const DEMO_ALERTS = [
+  { id: 'al1', severity: 'critical', title: 'Vadesi 30+ gün geçmiş', desc: 'Desert Home Decor — $33,984', action: 'Cariye Git', path: '/accounts' },
+  { id: 'al2', severity: 'warning', title: 'Kritik stok seviyesi', desc: 'Bambu Halı Doğal: 12 adet', action: 'Stok Detay', path: '/stock-analysis' },
+]
+
+const DEMO_UPCOMING = [
+  { id: 'u1', type: 'shipment', label: 'SHP-2026-0089 ETA', detail: 'New York — 18 Şub', days: 18 },
+  { id: 'u2', type: 'shipment', label: 'SHP-2026-0088 ETA', detail: 'Los Angeles — 08 Şub', days: 8 },
+  { id: 'u3', type: 'order', label: 'Berlin sipariş teslim', detail: 'ORD-2026-0140', days: 5 },
+  { id: 'u4', type: 'payment', label: 'Komisyon ödeme', detail: 'ABC Trading LLC', days: 3 },
+]
+
+export function useRecentActivityQuery() {
+  return useQuery({
+    queryKey: ['analytics', 'recentActivity'],
+    queryFn: async () => {
+      if (hasIpc()) return getApi().analytics.recentActivity()
+      return DEMO_RECENT_ACTIVITY
+    },
+    staleTime: 30_000,
+  })
+}
+
+export function useTopCustomersQuery() {
+  return useQuery({
+    queryKey: ['analytics', 'topCustomers'],
+    queryFn: async () => {
+      if (hasIpc()) return getApi().analytics.topCustomers()
+      return DEMO_TOP_CUSTOMERS
+    },
+    staleTime: 60_000,
+  })
+}
+
+export function useOrderStatsQuery() {
+  return useQuery({
+    queryKey: ['analytics', 'orderStats'],
+    queryFn: async () => {
+      if (hasIpc()) return getApi().analytics.orderStats()
+      return DEMO_ORDER_STATS
+    },
+    staleTime: 60_000,
+  })
+}
+
+export function useAlertsQuery() {
+  return useQuery({
+    queryKey: ['analytics', 'alerts'],
+    queryFn: async () => {
+      if (hasIpc()) return getApi().analytics.alerts()
+      return DEMO_ALERTS
+    },
+    staleTime: 60_000,
+  })
+}
+
+export function useUpcomingQuery() {
+  return useQuery({
+    queryKey: ['analytics', 'upcoming'],
+    queryFn: async () => {
+      if (hasIpc()) return getApi().analytics.upcoming()
+      return DEMO_UPCOMING
+    },
+    staleTime: 60_000,
+  })
+}
+
 // ── PIM: Attributes ─────────────────────────────────────────
 
 export function usePimAttributesQuery() {
