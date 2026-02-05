@@ -31,6 +31,7 @@ model User {
   sessions         Session[]
   cashTransactions CashTransaction[]
   auditLogs        AuditLog[]
+  soldOrders       Order[]           @relation("OrderSeller")
 
   @@map("users")
 }
@@ -701,6 +702,10 @@ model Order {
 
   // Kur bilgisi
   orderExchangeRate    Decimal     @default(1) @map("order_exchange_rate") @db.Decimal(10, 4)
+
+  // Satış temsilcisi (siparişi oluşturan şirket personeli)
+  sellerId             String?     @map("seller_id")
+  seller               User?       @relation("OrderSeller", fields: [sellerId], references: [id])
 
   notes                String?
   isCancelled          Boolean     @default(false) @map("is_cancelled")

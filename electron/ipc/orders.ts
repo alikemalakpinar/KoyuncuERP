@@ -35,6 +35,7 @@ const orderItemSchema = z.object({
 
 const createOrderSchema = z.object({
   accountId: z.string().min(1, 'Cari seçilmedi'),
+  sellerId: z.string().optional(), // Satış temsilcisi (giriş yapan kullanıcı)
   currency: z.string().min(1),
   vatRate: z.string().refine(v => new Decimal(v).gte(0), 'KDV negatif olamaz'),
   agencyStaffId: z.string().optional(),
@@ -80,6 +81,7 @@ export function registerOrderHandlers(ipcMain: IpcMain) {
             },
           },
           items: true,
+          seller: { select: { id: true, fullName: true, email: true } }, // Satış temsilcisi
           agencyStaff: { select: { id: true, name: true, agency: { select: { id: true, account: { select: { name: true } } } } } },
         },
       })
@@ -111,7 +113,7 @@ export function registerOrderHandlers(ipcMain: IpcMain) {
     }
   }))
 
-  // CREATE — wrapped in $transaction, Decimal.js math, stock reservation, NO ledger
+  // CREATE — wrapped in $transaction, Decimal.js math, stock validation & reservation, NO ledger
   ipcMain.handle('orders:create', protectedProcedure('manage_orders', async (ctx, rawData: any) => {
     // Zod validation
     const parsed = createOrderSchema.safeParse(rawData)
@@ -128,6 +130,50 @@ export function registerOrderHandlers(ipcMain: IpcMain) {
           where: { id: data.accountId, branchId: ctx.activeBranchId },
         })
         if (!account) return { success: false, error: 'Cari bu şubeye ait değil.' }
+
+        // Use logged-in user as seller if not provided
+        const sellerId = data.sellerId || ctx.user.id
+
+        // ═══════════════════════════════════════════════════════════
+        // STOCK VALIDATION - Check available stock for each item
+        // ═══════════════════════════════════════════════════════════
+        const stockErrors: string[] = []
+        for (const item of data.items) {
+          if (!item.sku) continue
+
+          // Find variant by SKU
+          const variant = await tx.productVariant.findFirst({
+            where: { sku: item.sku },
+          })
+          if (!variant) continue
+
+          // Get inventory in branch's warehouse
+          const inventory = await tx.inventoryItem.findFirst({
+            where: {
+              variantId: variant.id,
+              warehouse: {
+                code: { startsWith: 'WH-' }, // Main warehouse
+              },
+            },
+          })
+
+          if (inventory) {
+            const available = new Decimal(String(inventory.quantity))
+              .minus(new Decimal(String(inventory.reservedQty || 0)))
+            const requested = new Decimal(item.quantity)
+
+            if (requested.gt(available)) {
+              stockErrors.push(`${item.productName}: Talep ${requested.toFixed(0)}, Mevcut ${available.toFixed(0)} ${item.unit}`)
+            }
+          }
+        }
+
+        // If stock validation fails, return error (but don't block order creation)
+        // In production, you might want to block: if (stockErrors.length > 0) return { success: false, error: ... }
+        // For now, we'll just log a warning and continue
+        if (stockErrors.length > 0) {
+          console.warn('[Stock Warning]', stockErrors.join('; '))
+        }
 
         let totalAmount = new Decimal(0)
         const itemsData = data.items.map((item) => {
@@ -153,6 +199,7 @@ export function registerOrderHandlers(ipcMain: IpcMain) {
           data: {
             orderNo,
             accountId: data.accountId,
+            sellerId, // Satış temsilcisi
             branchId: ctx.activeBranchId,
             currency: data.currency,
             totalAmount: totalAmount.toFixed(2),
@@ -173,22 +220,29 @@ export function registerOrderHandlers(ipcMain: IpcMain) {
         // Stock reservation for each item with a SKU
         for (const item of data.items) {
           if (!item.sku) continue
-          const stock = await tx.stock.findFirst({
-            where: { variant: { sku: item.sku }, warehouse: { branch: { id: ctx.activeBranchId } } },
+
+          const variant = await tx.productVariant.findFirst({
+            where: { sku: item.sku },
           })
-          if (stock) {
-            const newReserved = new Decimal(String(stock.reservedQuantity ?? 0))
+          if (!variant) continue
+
+          const inventory = await tx.inventoryItem.findFirst({
+            where: { variantId: variant.id },
+          })
+
+          if (inventory) {
+            const newReserved = new Decimal(String(inventory.reservedQty ?? 0))
               .plus(new Decimal(item.quantity))
-            await tx.stock.update({
-              where: { id: stock.id },
-              data: { reservedQuantity: Math.round(newReserved.toNumber()) },
+            await tx.inventoryItem.update({
+              where: { id: inventory.id },
+              data: { reservedQty: newReserved.toNumber() },
             })
           }
         }
 
         await writeAuditLog({
           entityType: 'Order', entityId: order.id, action: 'CREATE',
-          newData: { orderNo, accountId: data.accountId, grandTotal: grandTotal.toFixed(2) },
+          newData: { orderNo, accountId: data.accountId, sellerId, grandTotal: grandTotal.toFixed(2) },
           userId: ctx.user.id, branchId: ctx.activeBranchId,
           description: `Yeni sipariş: ${order.orderNo} – ${grandTotal.toFixed(2)} ${data.currency}`,
         })
