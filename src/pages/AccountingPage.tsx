@@ -12,7 +12,7 @@ import {
 import { useAuth } from '../contexts/AuthContext'
 import AgingReport from '../components/platinum/AgingReport'
 import PeriodClosing from '../components/platinum/PeriodClosing'
-import FxRevaluation from '../components/platinum/FxRevaluation'
+// FxRevaluation kaldırıldı - Kur farkı işlemleri artık kullanılmıyor
 
 type TabKey = 'overview' | 'ledger' | 'chart_of_accounts' | 'cash_flow' | 'aging' | 'bank'
 
@@ -129,7 +129,6 @@ export default function AccountingPage() {
   const [ledgerSearch, setLedgerSearch] = useState('')
   const [dateRange, setDateRange] = useState('month')
   const [periodClosingOpen, setPeriodClosingOpen] = useState(false)
-  const [fxRevaluationOpen, setFxRevaluationOpen] = useState(false)
 
   const canViewAccounting = hasPermission('view_accounting')
 
@@ -180,13 +179,6 @@ export default function AccountingPage() {
             <option value="quarter">Bu Çeyrek</option>
             <option value="year">Bu Yıl</option>
           </select>
-          <button
-            onClick={() => setFxRevaluationOpen(true)}
-            className="flex items-center gap-1.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/10 px-3 py-2 text-sm font-medium text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/20 transition-colors"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Kur Değerleme
-          </button>
           <button
             onClick={() => setPeriodClosingOpen(true)}
             className="flex items-center gap-1.5 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/10 px-3 py-2 text-sm font-medium text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/20 transition-colors"
@@ -569,7 +561,6 @@ export default function AccountingPage() {
 
       {/* Platinum Modals */}
       <PeriodClosing open={periodClosingOpen} onClose={() => setPeriodClosingOpen(false)} />
-      <FxRevaluation open={fxRevaluationOpen} onClose={() => setFxRevaluationOpen(false)} />
     </motion.div>
   )
 }

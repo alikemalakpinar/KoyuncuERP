@@ -13,7 +13,7 @@ import { useAccountsQuery, useAccountHealthQuery } from '../hooks/useIpc'
 import AccountFormModal from '../components/modals/AccountFormModal'
 
 const typeLabels: Record<string, string> = {
-  CUSTOMER: 'Müşteri', SUPPLIER: 'Tedarikçi', AGENCY: 'Acente', BOTH: 'Müşteri/Tedarikçi',
+  CUSTOMER: 'Şirket', SUPPLIER: 'Tedarikçi', AGENCY: 'Acente', BOTH: 'Karma', INDIVIDUAL: 'Bireysel', MARKETER: 'Pazarlamacı',
 }
 
 const typeBadgeColors: Record<string, string> = {
@@ -21,10 +21,12 @@ const typeBadgeColors: Record<string, string> = {
   SUPPLIER: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300',
   AGENCY: 'bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300',
   BOTH: 'bg-gray-50 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+  INDIVIDUAL: 'bg-cyan-50 text-cyan-700 dark:bg-cyan-900/20 dark:text-cyan-300',
+  MARKETER: 'bg-pink-50 text-pink-700 dark:bg-pink-900/20 dark:text-pink-300',
 }
 
 const typeIcons: Record<string, typeof Users> = {
-  CUSTOMER: Building2, SUPPLIER: Globe, AGENCY: UserCheck, BOTH: Users,
+  CUSTOMER: Building2, SUPPLIER: Globe, AGENCY: UserCheck, BOTH: Users, INDIVIDUAL: Users, MARKETER: Handshake,
 }
 
 export default function AccountsPage() {
@@ -123,7 +125,7 @@ export default function AccountsPage() {
           >
             Tümü ({accounts.length})
           </button>
-          {['CUSTOMER', 'SUPPLIER', 'AGENCY', 'BOTH'].map((t) => {
+          {['CUSTOMER', 'INDIVIDUAL', 'SUPPLIER', 'AGENCY', 'MARKETER', 'BOTH'].map((t) => {
             const count = accounts.filter((a: any) => a.type === t).length
             if (count === 0) return null
             const Icon = typeIcons[t]

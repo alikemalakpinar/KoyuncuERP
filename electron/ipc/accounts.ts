@@ -25,7 +25,13 @@ export function registerAccountHandlers(ipcMain: IpcMain) {
       where,
       orderBy: { createdAt: 'desc' },
       include: {
-        agency: true,
+        agency: {
+          include: {
+            parentAgency: { select: { id: true, account: { select: { name: true } } } },
+            marketer: { select: { id: true, account: { select: { name: true } } } },
+          }
+        },
+        marketer: true,
         referredByAgency: { include: { account: { select: { id: true, name: true, code: true } } } },
       },
     })
@@ -52,6 +58,10 @@ export function registerAccountHandlers(ipcMain: IpcMain) {
     email?: string; address?: string; city?: string; country?: string
     currency?: string; riskLimit?: string; paymentTermDays?: number; parentAccountId?: string
     referredByAgencyId?: string
+    // Agency specific
+    agencyRegion?: string; defaultCommission?: string; parentAgencyId?: string; marketerId?: string
+    // Marketer specific
+    marketerDefaultRate?: string
   }) => {
     try {
       const account = await ctx.prisma.account.create({
@@ -66,6 +76,30 @@ export function registerAccountHandlers(ipcMain: IpcMain) {
           referredByAgencyId: data.referredByAgencyId,
         },
       })
+
+      // Create Agency record if type is AGENCY
+      if (data.type === 'AGENCY') {
+        await ctx.prisma.agency.create({
+          data: {
+            accountId: account.id,
+            region: data.agencyRegion,
+            defaultCommission: data.defaultCommission ? parseFloat(data.defaultCommission) : 0,
+            parentAgencyId: data.parentAgencyId || undefined,
+            marketerId: data.marketerId || undefined,
+          },
+        })
+      }
+
+      // Create Marketer record if type is MARKETER
+      if (data.type === 'MARKETER') {
+        await ctx.prisma.marketer.create({
+          data: {
+            accountId: account.id,
+            defaultRate: data.marketerDefaultRate ? parseFloat(data.marketerDefaultRate) : 0,
+          },
+        })
+      }
+
       await writeAuditLog({
         entityType: 'Account', entityId: account.id, action: 'CREATE',
         newData: account, userId: ctx.user.id, branchId: ctx.activeBranchId,

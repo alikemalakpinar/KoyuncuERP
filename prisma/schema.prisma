@@ -67,6 +67,8 @@ model Branch {
   salesReturns      SalesReturn[]
   cheques           Cheque[]
   workOrders        WorkOrder[]
+  consignments      Consignment[]
+  accountSettings   BranchAccountSettings?
 
   @@map("branches")
 }
@@ -381,9 +383,11 @@ model Account {
   orders          Order[]
   ledgerEntries   LedgerEntry[]
   agency          Agency?
+  marketer        Marketer?
   salesReturns    SalesReturn[]
   chequesDrawer   Cheque[]      @relation("ChequeDrawer")
   chequesPayee    Cheque[]      @relation("ChequePayee")
+  consignmentsTo  Consignment[] @relation("ConsignmentCustomer")
 
   @@unique([branchId, code])
   @@index([branchId])
@@ -391,10 +395,12 @@ model Account {
 }
 
 enum AccountType {
-  CUSTOMER
-  SUPPLIER
-  BOTH
-  AGENCY
+  CUSTOMER      // Müşteri - Satış yapılan kişi/şirket
+  SUPPLIER      // Tedarikçi
+  BOTH          // Müşteri/Tedarikçi
+  AGENCY        // Acenta - Aracı kurum
+  INDIVIDUAL    // Bireysel - Normal insan müşteri
+  MARKETER      // Pazarlamacı - Acentayı getiren kişi
 }
 
 // ─── Agency (Acente) ───────────────────────────────────────
@@ -409,30 +415,250 @@ model Agency {
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
+  // Ana acenta / alt acenta ilişkisi
+  parentAgencyId    String?  @map("parent_agency_id")
+  parentAgency      Agency?  @relation("AgencyHierarchy", fields: [parentAgencyId], references: [id])
+  subAgencies       Agency[] @relation("AgencyHierarchy")
+
+  // Pazarlamacı - Bu acentayı getiren kişi
+  marketerId        String?  @map("marketer_id")
+  marketer          Marketer? @relation(fields: [marketerId], references: [id])
+
   staff             AgencyStaff[]
+  staffAssignments  StaffAgencyAssignment[]
   commissionConfigs CommissionConfig[]
   commissionRecords CommissionRecord[]
   referredAccounts  Account[]          @relation("AgencyReferrals")
+  tours             Tour[]
+  tourOrders        TourOrder[]
 
   @@map("agencies")
 }
 
-model AgencyStaff {
+// ─── Pazarlamacı (Opsiyon) - Acentayı getiren kişi ───────────
+
+model Marketer {
   id              String   @id @default(cuid())
-  agencyId        String   @map("agency_id")
-  agency          Agency   @relation(fields: [agencyId], references: [id])
-  name            String
-  email           String?
-  phone           String?
-  staffCommission Decimal  @default(0) @map("staff_commission") @db.Decimal(5, 2)
+  accountId       String   @unique @map("account_id")
+  account         Account  @relation(fields: [accountId], references: [id])
+  defaultRate     Decimal  @default(0) @map("default_rate") @db.Decimal(5, 2)
   isActive        Boolean  @default(true) @map("is_active")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
+  agencies              Agency[]
+  marketerCommissions   MarketerCommission[]
+
+  @@map("marketers")
+}
+
+model MarketerCommission {
+  id               String           @id @default(cuid())
+  marketerId       String           @map("marketer_id")
+  marketer         Marketer         @relation(fields: [marketerId], references: [id])
+  orderId          String?          @map("order_id")
+  tourOrderId      String?          @map("tour_order_id")
+  tourOrder        TourOrder?       @relation(fields: [tourOrderId], references: [id])
+  commissionRate   Decimal          @map("commission_rate") @db.Decimal(5, 2)
+  baseAmount       Decimal          @map("base_amount") @db.Decimal(15, 2)
+  commissionAmount Decimal          @map("commission_amount") @db.Decimal(15, 2)
+  status           CommissionStatus @default(PENDING)
+  paidAt           DateTime?        @map("paid_at")
+  isCancelled      Boolean          @default(false) @map("is_cancelled")
+  createdAt        DateTime         @default(now()) @map("created_at")
+
+  @@index([marketerId, status])
+  @@map("marketer_commissions")
+}
+
+// ─── Tur (Gemi/Tur Bilgisi) ───────────────────────────────────
+
+enum TourType {
+  CRUISE        // Gemi turu
+  LAND_TOUR     // Kara turu
+  MIXED         // Karma tur
+  DAY_TRIP      // Günlük tur
+  SPECIAL       // Özel tur
+}
+
+model Tour {
+  id              String    @id @default(cuid())
+  code            String    @unique
+  name            String
+  type            TourType  @default(CRUISE)
+  agencyId        String    @map("agency_id")
+  agency          Agency    @relation(fields: [agencyId], references: [id])
+  shipName        String?   @map("ship_name")      // Gemi ismi
+  routeInfo       String?   @map("route_info")     // Rota bilgisi
+  seasonStart     DateTime? @map("season_start")
+  seasonEnd       DateTime? @map("season_end")
+  defaultPax      Int       @default(0) @map("default_pax")
+  commissionRate  Decimal   @default(0) @map("commission_rate") @db.Decimal(5, 2)
+  notes           String?
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  tourOrders TourOrder[]
+
+  @@index([agencyId])
+  @@map("tours")
+}
+
+model TourOrder {
+  id              String    @id @default(cuid())
+  tourId          String    @map("tour_id")
+  tour            Tour      @relation(fields: [tourId], references: [id])
+  agencyId        String    @map("agency_id")
+  agency          Agency    @relation(fields: [agencyId], references: [id])
+  orderId         String?   @map("order_id")
+  order           Order?    @relation(fields: [orderId], references: [id])
+  tourDate        DateTime  @map("tour_date") @db.Date
+  paxCount        Int       @default(0) @map("pax_count")
+  shipName        String?   @map("ship_name")
+  guideStaffId    String?   @map("guide_staff_id")
+  guideStaff      AgencyStaff? @relation("TourGuide", fields: [guideStaffId], references: [id])
+  totalSales      Decimal   @default(0) @map("total_sales") @db.Decimal(15, 2)
+  commissionRate  Decimal   @default(0) @map("commission_rate") @db.Decimal(5, 2)
+  notes           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  marketerCommissions MarketerCommission[]
+
+  @@index([tourId, tourDate])
+  @@index([agencyId])
+  @@map("tour_orders")
+}
+
+// ─── Çoklu Acenta Çalışan Ataması ─────────────────────────────
+
+model AgencyStaff {
+  id              String   @id @default(cuid())
+  name            String
+  email           String?
+  phone           String?
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Birincil acenta (eski yapıyla uyumluluk)
+  primaryAgencyId String?  @map("primary_agency_id")
+  primaryAgency   Agency?  @relation(fields: [primaryAgencyId], references: [id])
+
+  // Çoklu acenta atamaları - farklı komisyonlarla
+  agencyAssignments StaffAgencyAssignment[]
+
   orders            Order[]
   commissionRecords CommissionRecord[]
+  guidedTours       TourOrder[] @relation("TourGuide")
 
   @@map("agency_staff")
+}
+
+model StaffAgencyAssignment {
+  id              String   @id @default(cuid())
+  staffId         String   @map("staff_id")
+  staff           AgencyStaff @relation(fields: [staffId], references: [id])
+  agencyId        String   @map("agency_id")
+  agency          Agency   @relation(fields: [agencyId], references: [id])
+  commissionRate  Decimal  @default(0) @map("commission_rate") @db.Decimal(5, 2)
+  isActive        Boolean  @default(true) @map("is_active")
+  startDate       DateTime @default(now()) @map("start_date")
+  endDate         DateTime? @map("end_date")
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@unique([staffId, agencyId])
+  @@index([agencyId])
+  @@map("staff_agency_assignments")
+}
+
+// ─── Konsinye (Mal Takibi) ────────────────────────────────────
+
+enum ConsignmentStatus {
+  DRAFT         // Taslak
+  SENT          // Gönderildi
+  AT_CUSTOMER   // Müşteride
+  PARTIAL_SOLD  // Kısmen satıldı
+  SOLD          // Tamamen satıldı
+  RETURNED      // İade edildi
+  CANCELLED     // İptal
+}
+
+model Consignment {
+  id              String            @id @default(cuid())
+  consignmentNo   String            @unique @map("consignment_no")
+  branchId        String            @map("branch_id")
+  branch          Branch            @relation(fields: [branchId], references: [id])
+  customerId      String            @map("customer_id")
+  customer        Account           @relation("ConsignmentCustomer", fields: [customerId], references: [id])
+  agencyId        String?           @map("agency_id")
+  status          ConsignmentStatus @default(DRAFT)
+  sentDate        DateTime?         @map("sent_date")
+  returnDueDate   DateTime?         @map("return_due_date") @db.Date
+  totalValue      Decimal           @default(0) @map("total_value") @db.Decimal(15, 2)
+  soldValue       Decimal           @default(0) @map("sold_value") @db.Decimal(15, 2)
+  currency        String            @default("USD")
+  notes           String?
+  trackingNo      String?           @map("tracking_no")
+  shippingMethod  String?           @map("shipping_method")
+  isCancelled     Boolean           @default(false) @map("is_cancelled")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  items ConsignmentItem[]
+
+  @@index([branchId, status])
+  @@index([customerId])
+  @@map("consignments")
+}
+
+model ConsignmentItem {
+  id              String      @id @default(cuid())
+  consignmentId   String      @map("consignment_id")
+  consignment     Consignment @relation(fields: [consignmentId], references: [id])
+  variantId       String      @map("variant_id")
+  productName     String      @map("product_name")
+  sku             String?
+  quantity        Decimal     @db.Decimal(10, 2)
+  soldQuantity    Decimal     @default(0) @map("sold_quantity") @db.Decimal(10, 2)
+  returnedQuantity Decimal    @default(0) @map("returned_quantity") @db.Decimal(10, 2)
+  unitPrice       Decimal     @map("unit_price") @db.Decimal(15, 2)
+  totalPrice      Decimal     @map("total_price") @db.Decimal(15, 2)
+  notes           String?
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  @@index([consignmentId])
+  @@map("consignment_items")
+}
+
+// ─── Şube Bazlı Cari Ayarları ─────────────────────────────────
+
+model BranchAccountSettings {
+  id              String   @id @default(cuid())
+  branchId        String   @map("branch_id")
+  branch          Branch   @relation(fields: [branchId], references: [id])
+
+  // Varsayılan değerler
+  defaultCurrency String   @default("USD") @map("default_currency")
+  defaultPaymentTermDays Int @default(30) @map("default_payment_term_days")
+  defaultRiskLimit Decimal @default(50000) @map("default_risk_limit") @db.Decimal(15, 2)
+
+  // Cari kodu formatı
+  customerCodePrefix String @default("C") @map("customer_code_prefix")
+  supplierCodePrefix String @default("SP") @map("supplier_code_prefix")
+  agencyCodePrefix   String @default("AG") @map("agency_code_prefix")
+
+  // Özelleştirmeler
+  requireTaxId    Boolean  @default(false) @map("require_tax_id")
+  requireEmail    Boolean  @default(false) @map("require_email")
+  requirePhone    Boolean  @default(false) @map("require_phone")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([branchId])
+  @@map("branch_account_settings")
 }
 
 model CommissionConfig {
@@ -489,6 +715,7 @@ model Order {
   payments          Payment[]
   salesReturns      SalesReturn[]
   workOrders        WorkOrder[]
+  tourOrders        TourOrder[]
 
   @@unique([branchId, orderNo])
   @@index([branchId, createdAt])

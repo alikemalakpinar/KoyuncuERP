@@ -284,10 +284,20 @@ export default function Header({ breadcrumbs, onSearchClick, onNewOrder, onNewPa
                     </div>
                   </div>
                   {activeBranch && (
-                    <div className="mt-2 flex items-center gap-1.5 rounded-lg bg-brand-50 dark:bg-brand-900/20 px-2.5 py-1.5">
-                      <Building2 className="h-3 w-3 text-brand-600 dark:text-brand-400" />
-                      <span className="text-[11px] font-medium text-brand-700 dark:text-brand-300">{activeBranch.branchName}</span>
-                    </div>
+                    <button
+                      onClick={() => {
+                        setShowProfile(false)
+                        // Navigate to branch selection
+                        window.location.href = '/branch-select'
+                      }}
+                      className="mt-2 w-full flex items-center justify-between gap-1.5 rounded-lg bg-brand-50 dark:bg-brand-900/20 px-2.5 py-1.5 hover:bg-brand-100 dark:hover:bg-brand-900/30 transition-colors group"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <Building2 className="h-3 w-3 text-brand-600 dark:text-brand-400" />
+                        <span className="text-[11px] font-medium text-brand-700 dark:text-brand-300">{activeBranch.branchName}</span>
+                      </div>
+                      <ChevronRight className="h-3 w-3 text-brand-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
                   )}
                 </div>
 
