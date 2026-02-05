@@ -29,7 +29,12 @@
     "recharts": "^2.14.0",
     "zod": "^3.23.0"
   },
+  "prisma": {
+    "seed": "npx ts-node --compiler-options {\"module\":\"CommonJS\"} prisma/seed.ts"
+  },
   "devDependencies": {
+    "@types/node": "^20.10.0",
+    "ts-node": "^10.9.2",
     "@types/bcryptjs": "^2.4.6",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
