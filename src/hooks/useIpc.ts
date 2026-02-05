@@ -333,7 +333,134 @@ export function useCancelReturn() {
   })
 }
 
+// ── Agencies & Staff ────────────────────────────────────────
+
+export function useAgenciesQuery() {
+  return useQuery({
+    queryKey: ['agencies'],
+    queryFn: async () => {
+      if (hasIpc()) return getApi().accounts.listAgencies()
+      // Demo fallback
+      return [
+        { id: 'ag1', name: 'ABC Trading LLC', region: 'Doğu ABD', defaultCommission: 5.0, accountCode: 'AG-001' },
+        { id: 'ag2', name: 'West Coast Carpets', region: 'Batı ABD', defaultCommission: 4.5, accountCode: 'AG-002' },
+        { id: 'ag3', name: 'Southern Flooring Co.', region: 'Güney ABD', defaultCommission: 5.0, accountCode: 'AG-003' },
+      ]
+    },
+    staleTime: 30_000,
+  })
+}
+
+export function useAgencyStaffQuery(agencyId: string | null) {
+  return useQuery({
+    queryKey: ['agencyStaff', agencyId],
+    queryFn: async () => {
+      if (!agencyId) return []
+      if (hasIpc()) return getApi().accounts.listAgencyStaff(agencyId)
+      // Demo fallback
+      const demoStaff: Record<string, any[]> = {
+        ag1: [
+          { id: 'as1', name: 'Robert Johnson', commissionRate: 2.0 },
+          { id: 'as2', name: 'Emily Davis', commissionRate: 1.5 },
+        ],
+        ag2: [
+          { id: 'as3', name: 'Sarah Williams', commissionRate: 2.0 },
+        ],
+        ag3: [
+          { id: 'as4', name: 'James Brown', commissionRate: 2.0 },
+        ],
+      }
+      return demoStaff[agencyId] || []
+    },
+    enabled: !!agencyId,
+    staleTime: 30_000,
+  })
+}
+
+export function usePriceListsQuery() {
+  return useQuery({
+    queryKey: ['priceLists'],
+    queryFn: async () => {
+      if (hasIpc()) return getApi().pricing.listPriceLists()
+      // Demo fallback
+      return [
+        { id: 'pl1', name: 'USA Wholesale', multiplier: 0.85, currency: 'USD' },
+        { id: 'pl2', name: 'USA Premium', multiplier: 0.92, currency: 'USD' },
+        { id: 'pl3', name: '2026 Distributor', multiplier: 0.78, currency: 'USD' },
+      ]
+    },
+    staleTime: 60_000,
+  })
+}
+
+export function useUsersQuery() {
+  return useQuery({
+    queryKey: ['users'],
+    queryFn: async () => {
+      if (hasIpc()) return getApi().auth.listUsers()
+      // Demo fallback
+      return []
+    },
+    staleTime: 60_000,
+  })
+}
+
 // ── Analytics ──────────────────────────────────────────────
+
+export function useRecentActivityQuery(limit = 10) {
+  return useQuery({
+    queryKey: ['analytics', 'recentActivity', limit],
+    queryFn: async () => {
+      if (hasIpc()) return getApi().analytics.recentActivity({ limit })
+      // Demo fallback
+      return [
+        { id: '1', action: 'CREATE', entityType: 'Order', description: 'Yeni sipariş: ORD-00001 – $12,500 USD', userName: 'Ali Çelik', createdAt: new Date() },
+        { id: '2', action: 'STATUS_CHANGE', entityType: 'Order', description: 'Sipariş durumu: DRAFT → CONFIRMED', userName: 'Fatma Özkan', createdAt: new Date(Date.now() - 3600000) },
+        { id: '3', action: 'CREATE', entityType: 'Account', description: 'Yeni cari: C-011 – New Customer LLC', userName: 'Hasan Demir', createdAt: new Date(Date.now() - 7200000) },
+        { id: '4', action: 'UPDATE', entityType: 'Product', description: 'Ürün güncellendi: KHK-001', userName: 'Ali Çelik', createdAt: new Date(Date.now() - 10800000) },
+        { id: '5', action: 'CREATE', entityType: 'Payment', description: 'Ödeme alındı: $5,000 USD', userName: 'Zeynep Yıldız', createdAt: new Date(Date.now() - 14400000) },
+      ].slice(0, limit)
+    },
+    staleTime: 30_000,
+  })
+}
+
+export function useTopCustomersQuery(limit = 5) {
+  return useQuery({
+    queryKey: ['analytics', 'topCustomers', limit],
+    queryFn: async () => {
+      if (hasIpc()) return getApi().analytics.topCustomers({ limit })
+      // Demo fallback
+      return [
+        { id: '1', code: 'C-001', name: 'HomeStyle Inc.', totalOrders: 24, totalRevenue: '125000.00', currentBalance: '15000.00' },
+        { id: '2', code: 'C-002', name: 'Luxury Floors NY', totalOrders: 18, totalRevenue: '98000.00', currentBalance: '8500.00' },
+        { id: '3', code: 'C-003', name: 'Pacific Rugs', totalOrders: 15, totalRevenue: '76000.00', currentBalance: '5200.00' },
+        { id: '4', code: 'C-004', name: 'Desert Home Decor', totalOrders: 12, totalRevenue: '54000.00', currentBalance: '3100.00' },
+        { id: '5', code: 'C-005', name: 'Chicago Interiors', totalOrders: 9, totalRevenue: '42000.00', currentBalance: '2800.00' },
+      ].slice(0, limit)
+    },
+    staleTime: 60_000,
+  })
+}
+
+export function useOrderStatsQuery() {
+  return useQuery({
+    queryKey: ['analytics', 'orderStats'],
+    queryFn: async () => {
+      if (hasIpc()) return getApi().analytics.orderStats()
+      // Demo fallback
+      return [
+        { status: 'DRAFT', count: 5, total: '15000.00' },
+        { status: 'CONFIRMED', count: 8, total: '42000.00' },
+        { status: 'IN_PRODUCTION', count: 12, total: '78000.00' },
+        { status: 'READY', count: 6, total: '35000.00' },
+        { status: 'SHIPPED', count: 4, total: '28000.00' },
+        { status: 'DELIVERED', count: 45, total: '320000.00' },
+      ]
+    },
+    staleTime: 30_000,
+  })
+}
 
 export function useDashboardKpisQuery() {
   const demoKpis = useDemoKpis()

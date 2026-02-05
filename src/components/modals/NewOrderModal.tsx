@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   X, Plus, Trash2, AlertCircle, Search, AlertTriangle,
@@ -6,7 +6,13 @@ import {
   Star, ChevronDown, DollarSign, Info,
 } from 'lucide-react'
 import { orderCreateSchema, formatZodErrors } from '../../lib/validation'
-import { useCreateOrder, useAccountsQuery } from '../../hooks/useIpc'
+import {
+  useCreateOrder,
+  useAccountsQuery,
+  useAgenciesQuery,
+  useAgencyStaffQuery,
+  usePriceListsQuery
+} from '../../hooks/useIpc'
 import ProductPicker from '../ProductPicker'
 import { useToast } from '../Toast'
 import { useAuth } from '../../contexts/AuthContext'
@@ -39,64 +45,17 @@ const emptyLine: OrderLine = {
   belowCost: false,
 }
 
-// Demo data for agencies, staff, sellers
-const demoAgencies = [
-  { id: 'ag1', name: 'ABC Trading LLC', region: 'Doğu ABD', defaultCommission: 5.0 },
-  { id: 'ag2', name: 'West Coast Carpets', region: 'Batı ABD', defaultCommission: 4.5 },
-  { id: 'ag3', name: 'Southern Flooring Co.', region: 'Güney ABD', defaultCommission: 5.0 },
-  { id: 'ag4', name: 'Midwest Distributors', region: 'Orta ABD', defaultCommission: 4.0 },
-  { id: 'ag5', name: 'Texas Imports', region: 'Texas', defaultCommission: 4.0 },
-]
-
-const demoAgencyStaff: Record<string, { id: string; name: string; commission: number }[]> = {
-  ag1: [
-    { id: 'as1', name: 'Robert Johnson', commission: 2.0 },
-    { id: 'as2', name: 'Emily Davis', commission: 1.5 },
-    { id: 'as3', name: 'Michael Chen', commission: 1.8 },
-  ],
-  ag2: [
-    { id: 'as4', name: 'Sarah Williams', commission: 2.0 },
-    { id: 'as5', name: 'David Kim', commission: 1.5 },
-  ],
-  ag3: [
-    { id: 'as6', name: 'James Brown', commission: 2.0 },
-    { id: 'as7', name: 'Lisa Martinez', commission: 1.5 },
-  ],
-  ag4: [
-    { id: 'as8', name: 'Tom Wilson', commission: 1.5 },
-  ],
-  ag5: [
-    { id: 'as9', name: 'Anna Garcia', commission: 1.5 },
-  ],
-}
-
-const demoSellers = [
-  { id: 'sl1', name: 'Ali Çelik', role: 'Kıdemli Satış Müdürü' },
-  { id: 'sl2', name: 'Fatma Özkan', role: 'Satış Temsilcisi' },
-  { id: 'sl3', name: 'Hasan Demir', role: 'Satış Temsilcisi' },
-  { id: 'sl4', name: 'Zeynep Yıldız', role: 'Jr. Satış Temsilcisi' },
-]
-
-const demoCustomers = [
-  { id: 'c1', code: 'C-001', name: 'HomeStyle Inc.', city: 'New York', paymentTerm: 30, priceList: 'USA Wholesale' },
-  { id: 'c2', code: 'C-002', name: 'Luxury Floors NY', city: 'Los Angeles', paymentTerm: 45, priceList: 'USA Premium' },
-  { id: 'c3', code: 'C-003', name: 'Pacific Rugs', city: 'San Francisco', paymentTerm: 30, priceList: 'USA Wholesale' },
-  { id: 'c4', code: 'C-004', name: 'Desert Home Decor', city: 'Phoenix', paymentTerm: 30, priceList: null },
-  { id: 'c5', code: 'C-005', name: 'Chicago Interiors', city: 'Chicago', paymentTerm: 60, priceList: '2026 Distributor' },
-]
-
-// Demo price list multipliers (in production resolved via pricing:resolve IPC)
-const demoPriceListMultipliers: Record<string, number> = {
-  'USA Wholesale': 0.85,    // 15% discount from list price
-  'USA Premium': 0.92,      // 8% discount
-  '2026 Distributor': 0.78, // 22% discount
-}
-
 export default function NewOrderModal({ open, onClose }: Props) {
-  const { data: accounts = [] } = useAccountsQuery({ type: 'CUSTOMER' })
+  // Auth context - giriş yapan kullanıcı
+  const { user, hasPermission } = useAuth()
+
+  // Gerçek veri sorguları
+  const { data: customers = [], isLoading: customersLoading } = useAccountsQuery({ type: 'CUSTOMER' })
+  const { data: agencies = [], isLoading: agenciesLoading } = useAgenciesQuery()
+  const { data: priceLists = [] } = usePriceListsQuery()
+
   const createOrder = useCreateOrder()
   const { toast } = useToast()
-  const { hasPermission } = useAuth()
 
   // Core fields
   const [accountId, setAccountId] = useState('')
@@ -109,15 +68,22 @@ export default function NewOrderModal({ open, onClose }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerLineIdx, setPickerLineIdx] = useState<number>(0)
 
-  // New fields - Sales & Commission
-  const [sellerId, setSellerId] = useState('')
+  // Satış Temsilcisi - otomatik olarak giriş yapan kullanıcı
+  // sellerId artık user.id'den otomatik geliyor
+  const sellerId = user?.id || ''
+  const sellerName = user?.fullName || 'Bilinmeyen Kullanıcı'
+
+  // Agency & Commission fields
   const [agencyId, setAgencyId] = useState('')
   const [agencyStaffId, setAgencyStaffId] = useState('')
   const [agencyCommissionRate, setAgencyCommissionRate] = useState('')
   const [agencyStaffCommissionRate, setAgencyStaffCommissionRate] = useState('')
   const [commissionOverride, setCommissionOverride] = useState(false)
 
-  // New fields - Delivery & Payment
+  // Acenta çalışanları - seçili acentaya göre
+  const { data: agencyStaff = [] } = useAgencyStaffQuery(agencyId || null)
+
+  // Delivery & Payment fields
   const [priority, setPriority] = useState<'normal' | 'urgent' | 'vip'>('normal')
   const [estimatedDelivery, setEstimatedDelivery] = useState('')
   const [deliveryAddress, setDeliveryAddress] = useState('')
@@ -130,11 +96,27 @@ export default function NewOrderModal({ open, onClose }: Props) {
 
   const canViewCost = hasPermission('view_cost_price')
 
-  // Get available staff when agency changes
-  const availableStaff = useMemo(() => {
-    if (!agencyId) return []
-    return demoAgencyStaff[agencyId] || []
-  }, [agencyId])
+  // Seçili müşteri
+  const selectedCustomer = useMemo(() => {
+    return customers.find((c: any) => c.id === accountId)
+  }, [customers, accountId])
+
+  // Seçili acenta
+  const selectedAgency = useMemo(() => {
+    return agencies.find((a: any) => a.id === agencyId)
+  }, [agencies, agencyId])
+
+  // Seçili acenta çalışanı
+  const selectedStaff = useMemo(() => {
+    return agencyStaff.find((s: any) => s.id === agencyStaffId)
+  }, [agencyStaff, agencyStaffId])
+
+  // Müşterinin fiyat listesi çarpanı
+  const customerPriceMultiplier = useMemo(() => {
+    if (!selectedCustomer?.priceListId) return 1
+    const priceList = priceLists.find((pl: any) => pl.id === selectedCustomer.priceListId)
+    return priceList?.multiplier || 1
+  }, [selectedCustomer, priceLists])
 
   // When agency changes, set default commission
   const handleAgencyChange = (newAgencyId: string) => {
@@ -142,8 +124,8 @@ export default function NewOrderModal({ open, onClose }: Props) {
     setAgencyStaffId('')
     setAgencyStaffCommissionRate('')
     if (!commissionOverride) {
-      const agency = demoAgencies.find(a => a.id === newAgencyId)
-      setAgencyCommissionRate(agency ? String(agency.defaultCommission) : '')
+      const agency = agencies.find((a: any) => a.id === newAgencyId)
+      setAgencyCommissionRate(agency ? String(agency.defaultCommission || 0) : '')
     }
   }
 
@@ -151,17 +133,19 @@ export default function NewOrderModal({ open, onClose }: Props) {
   const handleStaffChange = (staffId: string) => {
     setAgencyStaffId(staffId)
     if (!commissionOverride) {
-      const staff = availableStaff.find(s => s.id === staffId)
-      setAgencyStaffCommissionRate(staff ? String(staff.commission) : '')
+      const staff = agencyStaff.find((s: any) => s.id === staffId)
+      setAgencyStaffCommissionRate(staff ? String(staff.commissionRate || 0) : '')
     }
   }
 
-  // When customer changes, set payment terms
+  // When customer changes, set payment terms and delivery address
   const handleCustomerChange = (custId: string) => {
     setAccountId(custId)
-    const cust = demoCustomers.find(c => c.id === custId)
+    const cust = customers.find((c: any) => c.id === custId)
     if (cust) {
-      setPaymentTermDays(String(cust.paymentTerm))
+      setPaymentTermDays(String(cust.paymentTermDays || 30))
+      setDeliveryAddress(cust.address || '')
+      setCurrency(cust.currency || 'USD')
     }
   }
 
@@ -185,14 +169,10 @@ export default function NewOrderModal({ open, onClose }: Props) {
 
   const handleProductSelect = (item: any) => {
     // Apply price list pricing if customer has an assigned list
-    const cust = demoCustomers.find(c => c.id === accountId)
     let resolvedPrice = item.unitPrice
-    let priceSource: 'list' | 'pricelist' = 'list'
 
-    if (cust?.priceList && demoPriceListMultipliers[cust.priceList]) {
-      const multiplier = demoPriceListMultipliers[cust.priceList]
-      resolvedPrice = (parseFloat(item.unitPrice || '0') * multiplier).toFixed(2)
-      priceSource = 'pricelist'
+    if (customerPriceMultiplier !== 1) {
+      resolvedPrice = (parseFloat(item.unitPrice || '0') * customerPriceMultiplier).toFixed(2)
     }
 
     const belowCost = parseFloat(resolvedPrice || '0') < parseFloat(item.baseCost || '0')
@@ -236,19 +216,25 @@ export default function NewOrderModal({ open, onClose }: Props) {
   const staffCommAmount = netTotal * (parseFloat(agencyStaffCommissionRate) || 0) / 100
   const totalCommission = agencyCommAmount + staffCommAmount
 
-  const selectedAgency = demoAgencies.find(a => a.id === agencyId)
-  const selectedStaff = availableStaff.find(s => s.id === agencyStaffId)
-  const selectedSeller = demoSellers.find(s => s.id === sellerId)
-  const selectedCustomer = demoCustomers.find(c => c.id === accountId)
-
   const handleSubmit = () => {
+    // Satış temsilcisi kontrolü (artık otomatik)
+    if (!sellerId) {
+      toast('error', 'Oturum bilgisi bulunamadı. Lütfen tekrar giriş yapın.')
+      return
+    }
+
     const data = {
-      accountId: accountId || (demoCustomers[0]?.id ?? ''),
+      accountId: accountId,
+      sellerId: sellerId, // Giriş yapan kullanıcı
       currency,
       vatRate,
       exchangeRate,
       notes: notes || undefined,
+      agencyStaffId: agencyStaffId || undefined,
+      agencyCommissionRate: agencyCommissionRate || undefined,
+      staffCommissionRate: agencyStaffCommissionRate || undefined,
       items: lines.map((l) => ({
+        variantId: l.variantId || undefined,
         productName: l.productName,
         sku: l.sku || undefined,
         quantity: l.quantity,
@@ -261,11 +247,6 @@ export default function NewOrderModal({ open, onClose }: Props) {
     const result = orderCreateSchema.safeParse(data)
     if (!result.success) {
       setErrors(formatZodErrors(result.error))
-      return
-    }
-
-    if (!sellerId) {
-      setErrors({ sellerId: 'Satış elemanı seçiniz' })
       return
     }
 
@@ -291,7 +272,6 @@ export default function NewOrderModal({ open, onClose }: Props) {
     setNotes('')
     setLines([{ ...emptyLine }])
     setErrors({})
-    setSellerId('')
     setAgencyId('')
     setAgencyStaffId('')
     setAgencyCommissionRate('')
@@ -303,6 +283,13 @@ export default function NewOrderModal({ open, onClose }: Props) {
     setPaymentTermDays('30')
     setGeneralDiscount('0')
   }
+
+  // Modal kapandığında formu sıfırla
+  useEffect(() => {
+    if (!open) {
+      resetForm()
+    }
+  }, [open])
 
   return (
     <>
@@ -331,7 +318,7 @@ export default function NewOrderModal({ open, onClose }: Props) {
                       Yeni Sipariş Oluştur
                     </h2>
                     <p className="text-[12px] text-gray-500 dark:text-gray-400">
-                      Müşteri, ürün ve komisyon bilgilerini ekleyin
+                      Satış Temsilcisi: <span className="font-medium text-brand-600">{sellerName}</span>
                     </p>
                   </div>
                   {/* Priority Badge */}
@@ -370,50 +357,29 @@ export default function NewOrderModal({ open, onClose }: Props) {
                 <div className="rounded-xl border border-border dark:border-border-dark p-4 space-y-4">
                   <div className="flex items-center gap-2 mb-1">
                     <Users className="h-4 w-4 text-brand-500" />
-                    <h3 className="text-[13px] font-semibold text-gray-900 dark:text-white">Müşteri & Satış Bilgileri</h3>
+                    <h3 className="text-[13px] font-semibold text-gray-900 dark:text-white">Müşteri Bilgileri</h3>
                   </div>
 
                   <div className="grid grid-cols-4 gap-4">
                     {/* Customer */}
-                    <div className="col-span-1">
+                    <div className="col-span-2">
                       <label className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">
-                        Müşteri (Alıcı)
+                        Müşteri (Alıcı) <span className="text-red-500">*</span>
                       </label>
                       <select
                         value={accountId}
                         onChange={(e) => handleCustomerChange(e.target.value)}
-                        className={`w-full rounded-xl border ${errors.accountId ? 'border-red-400' : 'border-border dark:border-border-dark'} bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 transition text-gray-900 dark:text-white`}
+                        disabled={customersLoading}
+                        className={`w-full rounded-xl border ${errors.accountId ? 'border-red-400' : 'border-border dark:border-border-dark'} bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 transition text-gray-900 dark:text-white disabled:opacity-50`}
                       >
-                        <option value="">Müşteri seçin...</option>
-                        {demoCustomers.map((c) => (
-                          <option key={c.id} value={c.id}>{c.code} – {c.name} ({c.city})</option>
+                        <option value="">{customersLoading ? 'Yükleniyor...' : 'Müşteri seçin...'}</option>
+                        {customers.map((c: any) => (
+                          <option key={c.id} value={c.id}>{c.code} – {c.name} ({c.city || 'Şehir yok'})</option>
                         ))}
                       </select>
                       {errors.accountId && (
                         <p className="mt-1 flex items-center gap-1 text-[11px] text-red-500">
                           <AlertCircle className="h-3 w-3" /> {errors.accountId}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Seller */}
-                    <div>
-                      <label className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">
-                        Satış Elemanı (Kim Sattı)
-                      </label>
-                      <select
-                        value={sellerId}
-                        onChange={(e) => setSellerId(e.target.value)}
-                        className={`w-full rounded-xl border ${errors.sellerId ? 'border-red-400' : 'border-border dark:border-border-dark'} bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 transition text-gray-900 dark:text-white`}
-                      >
-                        <option value="">Satıcı seçin...</option>
-                        {demoSellers.map((s) => (
-                          <option key={s.id} value={s.id}>{s.name} – {s.role}</option>
-                        ))}
-                      </select>
-                      {errors.sellerId && (
-                        <p className="mt-1 flex items-center gap-1 text-[11px] text-red-500">
-                          <AlertCircle className="h-3 w-3" /> {errors.sellerId}
                         </p>
                       )}
                     </div>
@@ -456,10 +422,10 @@ export default function NewOrderModal({ open, onClose }: Props) {
                       <Info className="h-3.5 w-3.5 text-brand-500 shrink-0" />
                       <span className="text-gray-600 dark:text-gray-400">
                         <strong className="text-gray-900 dark:text-white">{selectedCustomer.name}</strong>
-                        {' '}| {selectedCustomer.city} | Vade: {selectedCustomer.paymentTerm} gün
+                        {' '}| {selectedCustomer.city || 'Şehir yok'} | Vade: {selectedCustomer.paymentTermDays || 30} gün
                         {selectedCustomer.priceList && (
                           <> | <span className="inline-flex items-center rounded-md bg-indigo-100 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 px-1.5 py-0.5 text-[10px] font-medium ml-1">
-                            <DollarSign className="h-2.5 w-2.5 mr-0.5" />{selectedCustomer.priceList}
+                            <DollarSign className="h-2.5 w-2.5 mr-0.5" />{selectedCustomer.priceList.name}
                           </span></>
                         )}
                       </span>
@@ -503,11 +469,12 @@ export default function NewOrderModal({ open, onClose }: Props) {
                               <select
                                 value={agencyId}
                                 onChange={(e) => handleAgencyChange(e.target.value)}
-                                className="w-full rounded-xl border border-border dark:border-border-dark bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 transition text-gray-900 dark:text-white"
+                                disabled={agenciesLoading}
+                                className="w-full rounded-xl border border-border dark:border-border-dark bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 transition text-gray-900 dark:text-white disabled:opacity-50"
                               >
-                                <option value="">Acente seçin...</option>
-                                {demoAgencies.map((a) => (
-                                  <option key={a.id} value={a.id}>{a.name} ({a.region})</option>
+                                <option value="">{agenciesLoading ? 'Yükleniyor...' : 'Acente seçin...'}</option>
+                                {agencies.map((a: any) => (
+                                  <option key={a.id} value={a.id}>{a.name} ({a.region || 'Bölge yok'})</option>
                                 ))}
                               </select>
                             </div>
@@ -524,8 +491,8 @@ export default function NewOrderModal({ open, onClose }: Props) {
                                 className="w-full rounded-xl border border-border dark:border-border-dark bg-surface-secondary dark:bg-surface-dark-tertiary px-3 py-2 text-sm outline-none focus:border-brand-400 transition text-gray-900 dark:text-white disabled:opacity-50"
                               >
                                 <option value="">Çalışan seçin...</option>
-                                {availableStaff.map((s) => (
-                                  <option key={s.id} value={s.id}>{s.name} (varsayılan: %{s.commission})</option>
+                                {agencyStaff.map((s: any) => (
+                                  <option key={s.id} value={s.id}>{s.name} (varsayılan: %{s.commissionRate || 0})</option>
                                 ))}
                               </select>
                             </div>
@@ -586,10 +553,10 @@ export default function NewOrderModal({ open, onClose }: Props) {
                               <button
                                 onClick={() => {
                                   setCommissionOverride(false)
-                                  const agency = demoAgencies.find(a => a.id === agencyId)
-                                  const staff = availableStaff.find(s => s.id === agencyStaffId)
-                                  setAgencyCommissionRate(agency ? String(agency.defaultCommission) : '')
-                                  setAgencyStaffCommissionRate(staff ? String(staff.commission) : '')
+                                  const agency = agencies.find((a: any) => a.id === agencyId)
+                                  const staff = agencyStaff.find((s: any) => s.id === agencyStaffId)
+                                  setAgencyCommissionRate(agency ? String(agency.defaultCommission || 0) : '')
+                                  setAgencyStaffCommissionRate(staff ? String(staff.commissionRate || 0) : '')
                                 }}
                                 className="ml-auto text-amber-600 hover:text-amber-800 font-medium underline"
                               >
@@ -881,7 +848,7 @@ export default function NewOrderModal({ open, onClose }: Props) {
                   <div className="flex gap-6 text-[11px]">
                     <div>
                       <span className="text-gray-400 block">Satıcı</span>
-                      <span className="font-medium text-gray-900 dark:text-white">{selectedSeller?.name || '—'}</span>
+                      <span className="font-medium text-brand-600">{sellerName}</span>
                     </div>
                     <div>
                       <span className="text-gray-400 block">Müşteri</span>
@@ -955,7 +922,7 @@ export default function NewOrderModal({ open, onClose }: Props) {
                       </button>
                       <button
                         onClick={handleSubmit}
-                        disabled={createOrder.isPending}
+                        disabled={createOrder.isPending || !accountId}
                         className="rounded-xl bg-brand-600 px-6 py-2.5 text-[13px] font-medium text-white hover:bg-brand-700 transition-colors disabled:opacity-50 shadow-sm"
                       >
                         {createOrder.isPending ? 'Kaydediliyor...' : 'Sipariş Oluştur'}

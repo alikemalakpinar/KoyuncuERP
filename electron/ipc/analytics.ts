@@ -226,4 +226,128 @@ export function registerAnalyticsHandlers(ipcMain: IpcMain) {
       return null
     }
   }))
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RECENT ACTIVITY - For Dashboard Activity Feed
+  // ═══════════════════════════════════════════════════════════════════════════
+  ipcMain.handle('analytics:recentActivity', protectedProcedure('read', async (ctx, args?: { limit?: number }) => {
+    try {
+      const limit = args?.limit || 10
+
+      // Get recent audit logs
+      const auditLogs = await ctx.prisma.auditLog.findMany({
+        where: { branchId: ctx.activeBranchId },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        include: {
+          user: { select: { fullName: true } },
+        },
+      })
+
+      return auditLogs.map((log: any) => ({
+        id: log.id,
+        action: log.action,
+        entityType: log.entityType,
+        entityId: log.entityId,
+        description: log.description,
+        userName: log.user?.fullName || 'Sistem',
+        createdAt: log.createdAt,
+      }))
+    } catch (error) {
+      console.error('[IPC] analytics:recentActivity error:', error)
+      return []
+    }
+  }))
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TOP CUSTOMERS - For Dashboard
+  // ═══════════════════════════════════════════════════════════════════════════
+  ipcMain.handle('analytics:topCustomers', protectedProcedure('view_analytics', async (ctx, args?: { limit?: number }) => {
+    try {
+      const limit = args?.limit || 5
+
+      // Get customers with their order totals
+      const customers = await ctx.prisma.account.findMany({
+        where: {
+          branchId: ctx.activeBranchId,
+          type: 'CUSTOMER',
+          isActive: true,
+        },
+        select: {
+          id: true,
+          code: true,
+          name: true,
+          currentBalance: true,
+          orders: {
+            where: { isCancelled: false },
+            select: { grandTotal: true },
+          },
+        },
+        take: 50,
+      })
+
+      // Calculate totals and sort
+      const customersWithTotals = customers.map((c: any) => {
+        const totalRevenue = c.orders.reduce(
+          (sum: Decimal, order: any) => sum.plus(new Decimal(String(order.grandTotal))),
+          new Decimal(0),
+        )
+        return {
+          id: c.id,
+          code: c.code,
+          name: c.name,
+          totalOrders: c.orders.length,
+          totalRevenue: totalRevenue.toFixed(2),
+          currentBalance: new Decimal(String(c.currentBalance)).toFixed(2),
+        }
+      })
+
+      // Sort by revenue and take top N
+      return customersWithTotals
+        .sort((a, b) => parseFloat(b.totalRevenue) - parseFloat(a.totalRevenue))
+        .slice(0, limit)
+    } catch (error) {
+      console.error('[IPC] analytics:topCustomers error:', error)
+      return []
+    }
+  }))
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ORDER STATS BY STATUS - For Dashboard Charts
+  // ═══════════════════════════════════════════════════════════════════════════
+  ipcMain.handle('analytics:orderStats', protectedProcedure('view_analytics', async (ctx) => {
+    try {
+      const statuses = ['DRAFT', 'CONFIRMED', 'IN_PRODUCTION', 'READY', 'SHIPPED', 'DELIVERED']
+
+      const stats = await Promise.all(
+        statuses.map(async (status) => {
+          const count = await ctx.prisma.order.count({
+            where: {
+              branchId: ctx.activeBranchId,
+              status,
+              isCancelled: false,
+            },
+          })
+
+          const orders = await ctx.prisma.order.findMany({
+            where: {
+              branchId: ctx.activeBranchId,
+              status,
+              isCancelled: false,
+            },
+            select: { grandTotal: true },
+          })
+
+          const total = sumDecimal(orders, 'grandTotal')
+
+          return { status, count, total }
+        }),
+      )
+
+      return stats
+    } catch (error) {
+      console.error('[IPC] analytics:orderStats error:', error)
+      return []
+    }
+  }))
 }
