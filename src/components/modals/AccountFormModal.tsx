@@ -335,7 +335,7 @@ export default function AccountFormModal({ open, onClose, editAccount, onUpdate 
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-            className="fixed inset-4 md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-full md:max-w-3xl z-50 flex flex-col rounded-3xl bg-white dark:bg-surface-dark shadow-2xl border border-border/50 dark:border-border-dark/50 overflow-hidden md:max-h-[85vh]"
+            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-3xl z-50 flex flex-col rounded-3xl bg-white dark:bg-surface-dark shadow-2xl border border-border/50 dark:border-border-dark/50 overflow-hidden max-h-[90vh]"
           >
             {/* Gradient Header */}
             <div className="relative overflow-hidden">
