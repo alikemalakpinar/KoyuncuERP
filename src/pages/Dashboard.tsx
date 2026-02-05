@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -5,6 +6,7 @@ import {
   ArrowDownRight, ShoppingCart, Users, Package, Ship, Clock,
   CheckCircle, AlertTriangle, ArrowRight, Palette, FileText,
   CreditCard, Plus, Activity, XCircle, Sparkles, Wallet, PackageX,
+  RefreshCw,
 } from 'lucide-react'
 import {
   AreaChart, Area, ResponsiveContainer, BarChart, Bar,
@@ -20,6 +22,7 @@ import {
   useUpcomingQuery,
 } from '../hooks/useIpc'
 import { useAuth } from '../contexts/AuthContext'
+import { KpiSkeleton, ActivityFeedSkeleton, PipelineSkeleton, TopCustomersSkeleton } from '../components/Skeleton'
 
 const MiniArea = ({ data, color }: { data: { v: number }[]; color: string }) => (
   <ResponsiveContainer width="100%" height="100%">
@@ -104,15 +107,48 @@ function formatCurrency(value: string | number) {
   return `$${num.toLocaleString()}`
 }
 
+// Auto-refresh interval (30 seconds)
+const AUTO_REFRESH_INTERVAL = 30_000
+
 export default function Dashboard() {
-  const { data: kpis } = useDashboardKpisQuery()
-  const { data: recentActivity = [] } = useRecentActivityQuery()
-  const { data: topCustomers = [] } = useTopCustomersQuery()
-  const { data: orderStats = [] } = useOrderStatsQuery()
-  const { data: alerts = [] } = useAlertsQuery()
-  const { data: upcoming = [] } = useUpcomingQuery()
+  const { data: kpis, isLoading: kpisLoading, refetch: refetchKpis, dataUpdatedAt: kpisUpdatedAt } = useDashboardKpisQuery()
+  const { data: recentActivity = [], isLoading: activityLoading, refetch: refetchActivity } = useRecentActivityQuery()
+  const { data: topCustomers = [], isLoading: customersLoading, refetch: refetchCustomers } = useTopCustomersQuery()
+  const { data: orderStats = [], isLoading: statsLoading, refetch: refetchStats } = useOrderStatsQuery()
+  const { data: alerts = [], refetch: refetchAlerts } = useAlertsQuery()
+  const { data: upcoming = [], refetch: refetchUpcoming } = useUpcomingQuery()
   const { user } = useAuth()
   const navigate = useNavigate()
+
+  const [lastRefresh, setLastRefresh] = useState(new Date())
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  // Auto-refresh effect
+  useEffect(() => {
+    const interval = setInterval(() => {
+      handleRefresh(true)
+    }, AUTO_REFRESH_INTERVAL)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Manual refresh handler
+  const handleRefresh = async (silent = false) => {
+    if (!silent) setIsRefreshing(true)
+    await Promise.all([
+      refetchKpis(),
+      refetchActivity(),
+      refetchCustomers(),
+      refetchStats(),
+      refetchAlerts(),
+      refetchUpcoming(),
+    ])
+    setLastRefresh(new Date())
+    if (!silent) {
+      setTimeout(() => setIsRefreshing(false), 500)
+    }
+  }
+
+  const isLoading = kpisLoading || activityLoading || customersLoading || statsLoading
 
   const revenue = kpis?.monthlyRevenue ?? '$284,520'
   const revenueChange = kpis?.revenueChange ?? '+12.5%'
@@ -176,26 +212,43 @@ export default function Dashboard() {
             </p>
           </div>
 
-          {/* Alert badges */}
-          {alerts.length > 0 && (
-            <div className="hidden lg:flex flex-col gap-1.5">
-              {alerts.slice(0, 2).map((alert: any) => (
-                <button
-                  key={alert.id}
-                  onClick={() => navigate(alert.path)}
-                  className={`flex items-center gap-2 rounded-xl px-3 py-1.5 text-[11px] font-medium transition-all hover:-translate-y-0.5 ${
-                    alert.severity === 'critical'
-                      ? 'bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-800/20'
-                      : 'bg-amber-50 dark:bg-amber-900/10 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-800/20'
-                  }`}
-                >
-                  {alert.severity === 'critical' ? <XCircle className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
-                  <span>{alert.title}: {alert.desc}</span>
-                  <ArrowRight className="h-3 w-3" />
-                </button>
-              ))}
+          <div className="flex items-center gap-4">
+            {/* Alert badges */}
+            {alerts.length > 0 && (
+              <div className="hidden lg:flex flex-col gap-1.5">
+                {alerts.slice(0, 2).map((alert: any) => (
+                  <button
+                    key={alert.id}
+                    onClick={() => navigate(alert.path)}
+                    className={`flex items-center gap-2 rounded-xl px-3 py-1.5 text-[11px] font-medium transition-all hover:-translate-y-0.5 ${
+                      alert.severity === 'critical'
+                        ? 'bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 border border-red-100 dark:border-red-800/20'
+                        : 'bg-amber-50 dark:bg-amber-900/10 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-800/20'
+                    }`}
+                  >
+                    {alert.severity === 'critical' ? <XCircle className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
+                    <span>{alert.title}: {alert.desc}</span>
+                    <ArrowRight className="h-3 w-3" />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Refresh button */}
+            <div className="flex flex-col items-end gap-1">
+              <button
+                onClick={() => handleRefresh(false)}
+                disabled={isRefreshing}
+                className="flex items-center gap-1.5 rounded-xl border border-border dark:border-border-dark bg-white/80 dark:bg-surface-dark/80 px-3 py-1.5 text-[11px] font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-surface-dark-tertiary transition-all disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                {isRefreshing ? 'Yenileniyor...' : 'Yenile'}
+              </button>
+              <span className="text-[10px] text-gray-400">
+                Son: {lastRefresh.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+              </span>
             </div>
-          )}
+          </div>
         </div>
       </motion.div>
 
