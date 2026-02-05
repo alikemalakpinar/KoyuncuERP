@@ -10,6 +10,7 @@ import {
   AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid,
 } from 'recharts'
 import { useAccountsQuery, useAccountHealthQuery } from '../hooks/useIpc'
+import AccountFormModal from '../components/modals/AccountFormModal'
 
 const typeLabels: Record<string, string> = {
   CUSTOMER: 'Müşteri', SUPPLIER: 'Tedarikçi', AGENCY: 'Acente', BOTH: 'Müşteri/Tedarikçi',
@@ -33,6 +34,7 @@ export default function AccountsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<string | null>(null)
   const [agencyFilter, setAgencyFilter] = useState<string | null>(null)
+  const [showNewAccountModal, setShowNewAccountModal] = useState(false)
 
   // Get list of agencies for filter dropdown
   const agencies = useMemo(() => {
@@ -76,7 +78,10 @@ export default function AccountsPage() {
           <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Cariler</h1>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{accounts.length} kayıtlı hesap</p>
         </div>
-        <button className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-3 py-2 text-[13px] font-medium text-white hover:bg-brand-700 transition-colors">
+        <button
+          onClick={() => setShowNewAccountModal(true)}
+          className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-3 py-2 text-[13px] font-medium text-white hover:bg-brand-700 transition-colors"
+        >
           <Plus className="h-3.5 w-3.5" />
           Yeni Cari
         </button>
@@ -269,6 +274,12 @@ export default function AccountsPage() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* New Account Modal */}
+      <AccountFormModal
+        open={showNewAccountModal}
+        onClose={() => setShowNewAccountModal(false)}
+      />
     </motion.div>
   )
 }

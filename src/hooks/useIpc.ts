@@ -81,6 +81,31 @@ export function useCreateAccount() {
   })
 }
 
+export function useUpdateAccount() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      if (hasIpc()) return getApi().accounts.update(id, data)
+      return { success: true, data: { id, ...data } }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['accounts'] })
+      qc.invalidateQueries({ queryKey: ['account'] })
+    },
+  })
+}
+
+export function useDeactivateAccount() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
+      if (hasIpc()) return getApi().accounts.update(id, { isActive })
+      return { success: true }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['accounts'] }),
+  })
+}
+
 // ── Orders ─────────────────────────────────────────────────
 
 export function useOrdersQuery(filters?: { status?: string; accountId?: string }) {

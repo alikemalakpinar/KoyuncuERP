@@ -13,13 +13,15 @@ import {
   ArrowUpRight, ArrowDownRight, DollarSign, Users,
   UserCheck, Calendar, Send, Plus, Edit3, Trash2,
   Copy, CheckCircle, Star, Warehouse, Home, Briefcase,
-  Tag, X,
+  Tag, X, Settings, Power,
 } from 'lucide-react'
 import {
   AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid,
   BarChart, Bar,
 } from 'recharts'
-import { useAccountsQuery, useAccountHealthQuery, useAccountStatement } from '../hooks/useIpc'
+import { useAccountsQuery, useAccountHealthQuery, useAccountStatement, useUpdateAccount, useDeactivateAccount } from '../hooks/useIpc'
+import AccountFormModal from '../components/modals/AccountFormModal'
+import { useToast } from '../components/Toast'
 
 // ── Tabs ───────────────────────────────────────────────────
 const tabs = [
@@ -226,14 +228,19 @@ const categoryLabels: Record<string, string> = {
 export default function AccountDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { toast } = useToast()
   const [activeTab, setActiveTab] = useState<TabId>('overview')
   const [showComposer, setShowComposer] = useState(false)
   const [composerTemplate, setComposerTemplate] = useState<EmailTemplate | null>(null)
   const [statementFrom, setStatementFrom] = useState('')
   const [statementTo, setStatementTo] = useState('')
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [showDeactivateConfirm, setShowDeactivateConfirm] = useState(false)
   const { data: accounts = [] } = useAccountsQuery()
   const { data: health } = useAccountHealthQuery(id ?? null)
   const { data: statement, isLoading: statementLoading } = useAccountStatement(id ?? '', statementFrom || undefined, statementTo || undefined)
+  const updateAccount = useUpdateAccount()
+  const deactivateAccount = useDeactivateAccount()
 
   const account = useMemo(() => accounts.find((a: any) => a.id === id), [accounts, id])
 
@@ -267,6 +274,36 @@ export default function AccountDetailPage() {
     setShowComposer(true)
   }
 
+  const handleUpdate = (accountId: string, data: any) => {
+    updateAccount.mutate({ id: accountId, data }, {
+      onSuccess: (res) => {
+        if (res.success) {
+          toast('success', 'Cari başarıyla güncellendi')
+          setShowEditModal(false)
+        } else {
+          toast('error', res.error || 'Güncelleme başarısız')
+        }
+      },
+      onError: () => {
+        toast('error', 'Bir hata oluştu')
+      },
+    })
+  }
+
+  const handleDeactivate = () => {
+    const newStatus = !account.isActive
+    deactivateAccount.mutate({ id: account.id, isActive: newStatus }, {
+      onSuccess: (res) => {
+        if (res.success) {
+          toast('success', newStatus ? 'Cari aktifleştirildi' : 'Cari pasifleştirildi')
+          setShowDeactivateConfirm(false)
+        } else {
+          toast('error', res.error || 'İşlem başarısız')
+        }
+      },
+    })
+  }
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
       {/* Header */}
@@ -293,6 +330,24 @@ export default function AccountDetailPage() {
           </div>
         </div>
         <div className="hidden lg:flex items-center gap-3">
+          <button
+            onClick={() => setShowEditModal(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-border dark:border-border-dark px-3 py-1.5 text-[13px] font-medium text-gray-700 dark:text-gray-300 hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary transition-colors"
+          >
+            <Edit3 className="h-3.5 w-3.5" />
+            Düzenle
+          </button>
+          <button
+            onClick={() => setShowDeactivateConfirm(true)}
+            className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[13px] font-medium transition-colors ${
+              account.isActive
+                ? 'border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                : 'border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20'
+            }`}
+          >
+            <Power className="h-3.5 w-3.5" />
+            {account.isActive ? 'Pasifleştir' : 'Aktifleştir'}
+          </button>
           <button onClick={() => openComposer()} className="flex items-center gap-1.5 rounded-xl border border-border dark:border-border-dark px-3 py-1.5 text-[13px] font-medium text-gray-700 dark:text-gray-300 hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary transition-colors">
             <Mail className="h-3.5 w-3.5" />
             E-Posta Gönder
@@ -790,6 +845,71 @@ export default function AccountDetailPage() {
             template={composerTemplate}
             onClose={() => { setShowComposer(false); setComposerTemplate(null) }}
           />
+        )}
+      </AnimatePresence>
+
+      {/* ─── Edit Account Modal ─── */}
+      <AccountFormModal
+        open={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        editAccount={account}
+        onUpdate={handleUpdate}
+      />
+
+      {/* ─── Deactivate Confirmation Dialog ─── */}
+      <AnimatePresence>
+        {showDeactivateConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+            onClick={() => setShowDeactivateConfirm(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-md bg-white dark:bg-surface-dark rounded-2xl shadow-2xl p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${
+                  account.isActive ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-emerald-50 dark:bg-emerald-900/20'
+                }`}>
+                  <Power className={`h-5 w-5 ${account.isActive ? 'text-amber-600' : 'text-emerald-600'}`} />
+                </div>
+                <div>
+                  <h3 className="text-[15px] font-bold text-gray-900 dark:text-white">
+                    {account.isActive ? 'Cariyi Pasifleştir' : 'Cariyi Aktifleştir'}
+                  </h3>
+                  <p className="text-[12px] text-gray-500">{account.code} - {account.name}</p>
+                </div>
+              </div>
+
+              <p className="text-[13px] text-gray-600 dark:text-gray-400 mb-6">
+                {account.isActive
+                  ? 'Bu cariyi pasifleştirmek istediğinizden emin misiniz? Pasif cariler sipariş veya fatura işlemlerinde görünmeyecektir.'
+                  : 'Bu cariyi tekrar aktifleştirmek istediğinizden emin misiniz?'}
+              </p>
+
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setShowDeactivateConfirm(false)}
+                  className="rounded-xl border border-border dark:border-border-dark px-4 py-2 text-[13px] font-medium text-gray-700 dark:text-gray-300 hover:bg-surface-secondary dark:hover:bg-surface-dark-tertiary transition-colors"
+                >
+                  İptal
+                </button>
+                <button
+                  onClick={handleDeactivate}
+                  disabled={deactivateAccount.isPending}
+                  className={`rounded-xl px-4 py-2 text-[13px] font-medium text-white transition-colors disabled:opacity-50 ${
+                    account.isActive
+                      ? 'bg-amber-600 hover:bg-amber-700'
+                      : 'bg-emerald-600 hover:bg-emerald-700'
+                  }`}
+                >
+                  {deactivateAccount.isPending ? 'İşleniyor...' : account.isActive ? 'Pasifleştir' : 'Aktifleştir'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </motion.div>
