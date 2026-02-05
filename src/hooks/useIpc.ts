@@ -539,39 +539,6 @@ const DEMO_UPCOMING = [
   { id: 'u4', type: 'payment', label: 'Komisyon ödeme', detail: 'ABC Trading LLC', days: 3 },
 ]
 
-export function useRecentActivityQuery() {
-  return useQuery({
-    queryKey: ['analytics', 'recentActivity'],
-    queryFn: async () => {
-      if (hasIpc()) return getApi().analytics.recentActivity()
-      return DEMO_RECENT_ACTIVITY
-    },
-    staleTime: 30_000,
-  })
-}
-
-export function useTopCustomersQuery() {
-  return useQuery({
-    queryKey: ['analytics', 'topCustomers'],
-    queryFn: async () => {
-      if (hasIpc()) return getApi().analytics.topCustomers()
-      return DEMO_TOP_CUSTOMERS
-    },
-    staleTime: 60_000,
-  })
-}
-
-export function useOrderStatsQuery() {
-  return useQuery({
-    queryKey: ['analytics', 'orderStats'],
-    queryFn: async () => {
-      if (hasIpc()) return getApi().analytics.orderStats()
-      return DEMO_ORDER_STATS
-    },
-    staleTime: 60_000,
-  })
-}
-
 export function useAlertsQuery() {
   return useQuery({
     queryKey: ['analytics', 'alerts'],
