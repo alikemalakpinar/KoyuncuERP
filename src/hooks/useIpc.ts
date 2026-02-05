@@ -407,6 +407,61 @@ export function useUsersQuery() {
 
 // ── Analytics ──────────────────────────────────────────────
 
+export function useRecentActivityQuery(limit = 10) {
+  return useQuery({
+    queryKey: ['analytics', 'recentActivity', limit],
+    queryFn: async () => {
+      if (hasIpc()) return getApi().analytics.recentActivity({ limit })
+      // Demo fallback
+      return [
+        { id: '1', action: 'CREATE', entityType: 'Order', description: 'Yeni sipariş: ORD-00001 – $12,500 USD', userName: 'Ali Çelik', createdAt: new Date() },
+        { id: '2', action: 'STATUS_CHANGE', entityType: 'Order', description: 'Sipariş durumu: DRAFT → CONFIRMED', userName: 'Fatma Özkan', createdAt: new Date(Date.now() - 3600000) },
+        { id: '3', action: 'CREATE', entityType: 'Account', description: 'Yeni cari: C-011 – New Customer LLC', userName: 'Hasan Demir', createdAt: new Date(Date.now() - 7200000) },
+        { id: '4', action: 'UPDATE', entityType: 'Product', description: 'Ürün güncellendi: KHK-001', userName: 'Ali Çelik', createdAt: new Date(Date.now() - 10800000) },
+        { id: '5', action: 'CREATE', entityType: 'Payment', description: 'Ödeme alındı: $5,000 USD', userName: 'Zeynep Yıldız', createdAt: new Date(Date.now() - 14400000) },
+      ].slice(0, limit)
+    },
+    staleTime: 30_000,
+  })
+}
+
+export function useTopCustomersQuery(limit = 5) {
+  return useQuery({
+    queryKey: ['analytics', 'topCustomers', limit],
+    queryFn: async () => {
+      if (hasIpc()) return getApi().analytics.topCustomers({ limit })
+      // Demo fallback
+      return [
+        { id: '1', code: 'C-001', name: 'HomeStyle Inc.', totalOrders: 24, totalRevenue: '125000.00', currentBalance: '15000.00' },
+        { id: '2', code: 'C-002', name: 'Luxury Floors NY', totalOrders: 18, totalRevenue: '98000.00', currentBalance: '8500.00' },
+        { id: '3', code: 'C-003', name: 'Pacific Rugs', totalOrders: 15, totalRevenue: '76000.00', currentBalance: '5200.00' },
+        { id: '4', code: 'C-004', name: 'Desert Home Decor', totalOrders: 12, totalRevenue: '54000.00', currentBalance: '3100.00' },
+        { id: '5', code: 'C-005', name: 'Chicago Interiors', totalOrders: 9, totalRevenue: '42000.00', currentBalance: '2800.00' },
+      ].slice(0, limit)
+    },
+    staleTime: 60_000,
+  })
+}
+
+export function useOrderStatsQuery() {
+  return useQuery({
+    queryKey: ['analytics', 'orderStats'],
+    queryFn: async () => {
+      if (hasIpc()) return getApi().analytics.orderStats()
+      // Demo fallback
+      return [
+        { status: 'DRAFT', count: 5, total: '15000.00' },
+        { status: 'CONFIRMED', count: 8, total: '42000.00' },
+        { status: 'IN_PRODUCTION', count: 12, total: '78000.00' },
+        { status: 'READY', count: 6, total: '35000.00' },
+        { status: 'SHIPPED', count: 4, total: '28000.00' },
+        { status: 'DELIVERED', count: 45, total: '320000.00' },
+      ]
+    },
+    staleTime: 30_000,
+  })
+}
+
 export function useDashboardKpisQuery() {
   const demoKpis = useDemoKpis()
 

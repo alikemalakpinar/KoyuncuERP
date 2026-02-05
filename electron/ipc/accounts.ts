@@ -134,4 +134,102 @@ export function registerAccountHandlers(ipcMain: IpcMain) {
       return { success: false, error: error.message }
     }
   }))
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // AGENCY & STAFF ENDPOINTS (For NewOrderModal dropdowns)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  ipcMain.handle('accounts:listAgencies', protectedProcedure('read', async (ctx) => {
+    const agencies = await ctx.prisma.agency.findMany({
+      where: {
+        account: { branchId: ctx.activeBranchId, isActive: true },
+      },
+      include: {
+        account: { select: { id: true, code: true, name: true, city: true, country: true } },
+        parentAgency: { include: { account: { select: { name: true } } } },
+        marketer: { include: { account: { select: { name: true } } } },
+      },
+      orderBy: { account: { name: 'asc' } },
+    })
+
+    return agencies.map(ag => ({
+      id: ag.id,
+      accountId: ag.accountId,
+      accountCode: ag.account.code,
+      name: ag.account.name,
+      region: ag.region,
+      city: ag.account.city,
+      country: ag.account.country,
+      defaultCommission: ag.defaultCommission ? Number(ag.defaultCommission) : 0,
+      parentAgency: ag.parentAgency?.account?.name || null,
+      marketer: ag.marketer?.account?.name || null,
+    }))
+  }))
+
+  ipcMain.handle('accounts:listAgencyStaff', protectedProcedure('read', async (ctx, args: { agencyId: string }) => {
+    if (!args.agencyId) return []
+
+    const staff = await ctx.prisma.agencyStaff.findMany({
+      where: {
+        agencyId: args.agencyId,
+        isActive: true,
+      },
+      orderBy: { name: 'asc' },
+    })
+
+    return staff.map(s => ({
+      id: s.id,
+      name: s.name,
+      commissionRate: s.commissionRate ? Number(s.commissionRate) : 0,
+      phone: s.phone,
+      email: s.email,
+    }))
+  }))
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PRICE LISTS ENDPOINT
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  ipcMain.handle('pricing:listPriceLists', protectedProcedure('read', async (ctx) => {
+    const priceLists = await ctx.prisma.priceList.findMany({
+      where: { isActive: true },
+      orderBy: { name: 'asc' },
+    })
+
+    return priceLists.map(pl => ({
+      id: pl.id,
+      name: pl.name,
+      currency: pl.currency,
+      multiplier: 1, // Will be calculated from priceListItems in production
+    }))
+  }))
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // USERS LIST (for admin/reporting)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  ipcMain.handle('auth:listUsers', protectedProcedure('read', async (ctx) => {
+    const users = await ctx.prisma.user.findMany({
+      where: { isActive: true },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        branches: {
+          select: {
+            role: true,
+            branch: { select: { code: true, name: true } },
+          },
+        },
+      },
+      orderBy: { fullName: 'asc' },
+    })
+
+    return users.map(u => ({
+      id: u.id,
+      email: u.email,
+      fullName: u.fullName,
+      roles: u.branches.map(b => ({ branch: b.branch.code, role: b.role })),
+    }))
+  }))
 }
