@@ -162,19 +162,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null)
 
   // Selection state
-  const [availableBranches] = useState<BranchInfo[]>(DEMO_BRANCHES)
+  const [availableBranches, setAvailableBranches] = useState<BranchInfo[]>(DEMO_BRANCHES)
   const [selectedBranchInfo, setSelectedBranchInfo] = useState<BranchInfo | null>(null)
   const [branchUsers, setBranchUsers] = useState<BranchUser[]>([])
   const [selectedUser, setSelectedUser] = useState<BranchUser | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
   const isAuthenticated = step === 'authenticated' && !!user && !!activeBranch
   const role = activeBranch?.role ?? null
 
+  // Fetch branches from database on mount (Electron mode)
+  useEffect(() => {
+    if (hasIpc()) {
+      api.branches().then((result) => {
+        if (result.success && result.data.length > 0) {
+          setAvailableBranches(result.data)
+        }
+        setIsLoading(false)
+      }).catch(() => {
+        setIsLoading(false)
+      })
+    } else {
+      setIsLoading(false)
+    }
+  }, [])
+
   // Step 1: Select branch
-  const selectBranch = useCallback((branchId: string) => {
+  const selectBranch = useCallback(async (branchId: string) => {
     const branch = availableBranches.find((b) => b.branchId === branchId)
     if (!branch) return
     setSelectedBranchInfo(branch)
+
+    // Fetch real users in Electron mode
+    if (hasIpc()) {
+      try {
+        const result = await api.branchUsers(branchId)
+        if (result.success) {
+          setBranchUsers(result.data)
+          setStep('user')
+          return
+        }
+      } catch {
+        // fallback to demo
+      }
+    }
+
+    // Demo fallback
     const users = DEMO_BRANCH_USERS[branchId] ?? []
     setBranchUsers(users)
     setStep('user')

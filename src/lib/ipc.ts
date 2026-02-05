@@ -106,6 +106,10 @@ export const api = {
     ipcCall('auth:logout', { token }),
   me: (token: string) =>
     ipcCall('auth:me', { token }),
+  branches: () =>
+    ipcCall('auth:branches'),
+  branchUsers: (branchId: string) =>
+    ipcCall('auth:branchUsers', { branchId }),
 
   // Accounts
   accountsList: (filters?: any) => ipcCall('accounts:list', filters),
